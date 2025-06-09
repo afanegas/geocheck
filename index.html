@@ -1,0 +1,2268 @@
+<!DOCTYPE html>
+	<!--
+	=======================================================
+	Projektname   : GEO-Check
+	Version       : v1.3.4
+	Erstellungsdatum : 09.06.2025
+	Autor	      : Alejandro Fanegas
+	Lizenz        : MIT-Lizenz
+	=======================================================
+	-->
+<html>
+  <head>
+    <title>Geo-Check</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%23003366' d='M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M15,7H9V9H12V17H14V9H15V7Z'/></svg>">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf/turf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsts/dist/jsts.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.8.0/proj4.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet-simple-map-screenshoter"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.4.0/jspdf.umd.min.js"></script>
+    <!-- Backup local version:
+    <link rel="stylesheet" href="css/Control.Geocoder.css" />
+    //<script src="js/Control.Geocoder.js"></script>
+       -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.css" />
+    <script src="https://unpkg.com/leaflet-control-geocoder/dist/Control.Geocoder.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/@mdi/font/css/materialdesignicons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-measure@2.3.0/dist/leaflet-measure.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet-measure@2.3.0/dist/leaflet-measure.js"></script>
+    <style>
+      #page-title {
+      font-size: 2rem; /* Schriftgröße */
+      font-weight: bold; /* Fettschrift */
+      text-align: center; /* Zentriert ausrichten */
+      margin: 20px 0; /* Abstand oben und unten */
+      color: #003366; /* Farbe */
+      font-family: Arial, sans-serif; /* Schriftart */
+      }
+      body { 
+      margin: 0; 
+      font-family: Arial, sans-serif; 
+      background: #F5F5F5; 
+      color: #333333; 
+      }
+      #process-container, #result-container {
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px;
+      background: #ffffff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      #parameter-container {
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px;
+      background: #ffffff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      font-size: 0.9rem; /* Kleinere Schriftgröße */
+      }
+      #debug-log-container {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px; /* Abstand zwischen den Buttons */
+      max-height: 200px; /* Maximale Höhe */
+      overflow-y: auto; /* Vertikales Scrollen ermöglichen */
+      transition: max-height 0.3s ease; /* Animation */
+      } 
+      #debug-header, #debug-header2 {
+      display: none; /* XXXXXX COMMENT This to show the logs  XXXXX
+      text-align: left; /* Text linksbündig ausrichten */
+      font-weight: normal; /* Fettschrift entfernen */
+      cursor: pointer;
+      padding: 10px;
+      margin-bottom: 10px; /* Abstand zum Container darunter */
+      background: #343a40;
+      color: white;   
+      font-size: 0.8rem;
+      border-radius: 5px;
+      margin: 10px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      transition: background 0.3s ease; /* Animation für Hover-Effekt */
+      }
+      #process-container button {
+      padding: 12px;
+      border: none;
+      border-radius: 4px;
+      background: #003366; 
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      }
+      #process-container button:hover {
+      background: #66CC33; 
+      }
+      #parameter-container {
+      display: grid;
+      grid-template-columns: auto 2fr; /* Zwei Spalten: Labels und Eingabefelder */
+      column-gap: 10px;               /* Abstand zwischen den Spalten */
+      row-gap: 10px;                  /* Abstand zwischen den Zeilen */
+      align-items: center;            /* Vertikale Ausrichtung der Elemente */
+      }
+      #parameter-container label {
+      text-align: right;              /* Labels rechts ausrichten (optional) */
+      }
+      #parameter-container input {
+      width: 100%;                    /* Eingabefelder nutzen den verfügbaren Platz */
+      max-width: 150px;               /* Begrenzen Sie die maximale Breite */
+      }
+      #parameter-container label {
+      font-weight: bold;
+      }
+      #parameter-container input {
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      width: 80px;
+      text-align: center;
+      }
+      #result-container {
+      font-size: 0.9rem;
+      margin: 10px;
+      }
+      #result-container h3 {
+      color: #003366;
+      }
+      #debug-log-container {
+      display: none; /* Komplett unsichtbar, wenn zugeklappt */
+      max-height: 0; /* Nur zur Sicherheit */
+      overflow: hidden; /* Inhalt verstecken */
+      transition: max-height 0.3s ease; /* Sanfte Animation */
+      background: #343a40;
+      color: white;
+      font-size: 0.8rem;
+      padding: 10px;
+      margin: 10px;
+      border-radius: 5px;
+      }
+      #debug-log-container.expanded {
+      display: block; /* Sichtbar, wenn aufgeklappt */
+      max-height: 200px; /* Maximale Höhe bei Sichtbarkeit */
+      overflow-y: auto; /* Scrollen bei Bedarf */
+      }
+      #debug-log-container button {
+      background: #495057;
+      border: none;
+      color: white;
+      padding: 5px 10px;
+      margin-bottom: 5px;
+      cursor: pointer;
+      }
+      #debug-log-container button:hover {
+      background: #212529;
+      }
+      #map {
+      height: calc(100vh - 300px);
+      margin: 10px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      /* Stil für den Header */
+      #debug-header:hover {
+      background: #495057; /* Helleres Grau beim Hover */
+      }
+      /* Button-Stile in Debug-Container */
+      #debug-container button {
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      background: #6699CC;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      }
+      #debug-container button:hover {
+      background: #66CC33; /* Grüne Farbe beim Hover */
+      }
+      #debug-container {
+      display: hidd;
+      flex-wrap: wrap;
+      gap: 10px; /* Abstand zwischen Buttons */
+      max-height: 200px; /* Maximale Höhe */
+      overflow-y: auto; /* Vertikales Scrollen */
+      overflow-x: auto; /* Horizontales Scrollen */
+      transition: max-height 0.3s ease; /* Sanfte Animation */
+      }
+      #debug-container.collapsed {
+      max-height: 0;
+      overflow: hidden;
+      }
+      #debug-container.expanded {
+      max-height: 200px; /* oder eine größere Höhe */
+      overflow-y: auto;
+      }
+      #parameter-container input {
+      width: 60px;
+      }
+      #legend, #legend-warmeleitfahigkeit {
+      display: none; /* Standardmäßig ausgeblendet */
+      position: absolute;
+      top: 300px; /* Abstand von oben, kann angepasst werden */
+      right: 10px; /* Abstand von rechts */
+      background: white;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      z-index: 1000;
+      }
+      #legend img, #legend-warmeleitfahigkeit img {
+      width: 450px; /* Standardbreite der Legende */
+      height: auto; /* Proportionale Höhe */
+      max-height: 550px; /* Maximalhöhe */
+      }
+      @media (max-width: 480px) {
+      #legend img, #legend-warmeleitfahigkeit img {
+      width: 90vw; /* Breite auf 90% des Ansichtsfensters beschränken */
+      height: auto; /* Höhe proportional zur Breite */
+      }
+      }
+      @media (max-width: 768px) and (min-width: 481px) {
+      #legend img, #legend-warmeleitfahigkeit img {
+      width: 80vw; /* Breite auf 80% des Ansichtsfensters beschränken */
+      height: auto; /* Höhe proportional zur Breite */
+      }
+      }
+      #legend-title {
+      font-weight: bold; /* Fettschrift */
+      font-size: 13px; /* Schriftgröße */
+      margin-bottom: 10px; /* Abstand zur Legende */
+      text-align: left; /* Zentrierte Ausrichtung */
+      color: #333; /* Dunkelgraue Schriftfarbe */
+      }
+      .toggle-legend {
+      background-color: #fff; /* Weißer Hintergrund */
+      border: 1px solid #ccc; /* Standardmäßige Randfarbe */
+      border-radius: 4px; /* Runde Ecken wie andere Leaflet-Buttons */
+      box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3); /* Schatten für 3D-Effekt */
+      padding: 6px 10px; /* Gleichmäßiger Innenabstand */
+      font-size: 14px; /* Standard-Schriftgröße */
+      color: #333; /* Dunkelgraue Schriftfarbe */
+      cursor: pointer; /* Zeiger als Hand */
+      transition: all 0.2s ease-in-out; /* Weiche Übergänge bei Hover */
+      }
+      .toggle-legend:hover {
+      background-color: #f4f4f4; /* Hellere Hintergrundfarbe beim Hover */
+      border-color: #aaa; /* Etwas dunklerer Rand beim Hover */
+      }
+      #button-container {
+      display: flex; /* Stellt sicher, dass die Buttons in einer Zeile angezeigt werden */
+      align-items: center; /* Zentriert die Buttons vertikal */
+      gap: 10px; /* Abstand zwischen den Buttons */
+      }
+      #resetButton {
+      width: 50px;
+      height: 50px;
+      background: #003366;
+      border: none;
+      border-radius: 4px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      }
+      #resetButton:hover {
+      background: #66CC33; /* Hover-Farbe */
+      }
+      #helpButton {
+        width: 50px;
+        height: 50px;
+        background: #003366;
+        border: none;
+        border-radius: 4px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.3s ease;
+        }
+      #process-container button:first-child {
+      height: 50px; /* Gleiche Höhe wie der Reset-Button */
+      flex-grow: 1; /* Füllt den restlichen Platz harmonisch aus */
+      padding: 0 20px; /* Innerer Abstand */
+      border: none;
+      border-radius: 4px;
+      background: #003366;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s ease;
+      }
+      #process-container button:first-child:hover {
+      background: #66CC33; /* Hover-Farbe */
+      }
+      #pdfButton {
+        width: calc(100% - 60px); /* Breite angepasst, um Platz für den GeoJSON Button zu lassen */
+        height: 50px; /* Gleiche Höhe wie der GeoJSON Button */
+        padding: 0; /* Padding entfernt, damit die Höhe exakt stimmt */
+        border: none;
+        border-radius: 4px;
+        background: #003366;
+        color: white;
+        font-size: 16px;
+        cursor: pointer;
+        transition: background 0.3s ease;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    #pdfButton:hover {
+        background: #66CC33;
+    }
+    
+    #exportGeoJSONButton {
+        width: 50px;
+        height: 50px;
+        background: #003366;
+        border: none;
+        border-radius: 4px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.3s ease;
+    }
+    #exportGeoJSONButton:hover {
+        background: #66CC33;
+    }
+    #companionButton {
+        width: 50px;
+        height: 50px;
+        background: #003366;
+        border: none;
+        border-radius: 4px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.3s ease;
+    }
+    #companionButton:hover {
+        background: #66CC33;
+    }
+    </style>
+  </head>
+
+  <body>
+
+<!-- //////////// -->
+<!-- WEB STRUKTUR -->
+<!-- //////////// -->
+
+    <h1 id="page-title">Geo-Check</h1>
+    <div id="map"></div>
+    <div id="legend">
+      <p id="legend-title">Geothermisches Potenzial: Entzugsleistung bis 100 m, für 2400 h/a</p>
+      <img src="https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?SERVICE=WMS&REQUEST=GetLegendGraphic&VERSION=1.1.1&LAYER=lb_geopot_2400100_fl&FORMAT=image/png" alt="Legende">
+    </div>
+    <div id="legend-warmeleitfahigkeit">
+      <p id="legend-title">Spezifische Wärmeleitfähigkeit bis 100 m</p>
+      <img src="https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?SERVICE=WMS&REQUEST=GetLegendGraphic&VERSION=1.1.1&LAYER=db_geopot_wlf100_fl&FORMAT=image/png" alt="Legende">
+    </div>
+    <div id="process-container">
+        <div id="button-container">
+          <button onclick="executeFullProcess()">Erdwärmesonden aus Polygon ermitteln</button>
+          <button id="resetButton" onclick="resetMap()" title="Alle Eingaben zurücksetzen">
+            <i class="mdi mdi-restart" style="font-size: 24px; color: white;"></i>
+          </button>
+          <button id="helpButton" onclick="showErrorDialog(helpText)" title="Hilfe">
+            <i class="mdi mdi-help-circle-outline" style="font-size: 24px; color: white;"></i>
+          </button>
+        </div>
+      </div>
+    <!-- Parameter-Container -->
+    <div id="parameter-container">
+      <label for="sondenAbstand">Abstand zwischen Sonden [m]:</label>
+      <input type="number" id="sondenAbstand" value="6" min="0" step="1">
+      <label for="gebäudeAbstand">Abstand zu Gebäuden [m]:</label>
+      <input type="number" id="gebäudeAbstand" value="3" min="0" step="1">
+      <label for="bäumeAbstand">Abstand zu Bäumen [m]:</label>
+      <input type="number" id="bäumeAbstand" value="3" min="0" step="1">
+      <label for="restriktionAbstand">Abstand zu Restriktionsflächen [m]:</label>
+      <input type="number" id="restriktionAbstand" value="0" min="0" step="1">
+      <label for="sondenTiefe">Sondentiefe [m]:</label>
+      <input type="number" id="sondenTiefe" value="100" min="0" step="1">
+      <label for="spezEntzugsleistung">Spez. Entzugsleistung [W/m]:</label>
+      <input 
+        type="number" 
+        id="spezEntzugsleistung" 
+        value="35" 
+        min="0" 
+        step="1" 
+        title="Die spezifische Entzugsleistung bezieht sich auf 2 Sonden à 100m Länge mit 6m Abstand, äquivalent zu einem Einfamilienhaus (vgl. Energieatlas Berlin). Weitere Informationen finden Sie über den Hilfe-Button (❓) oben rechts."">
+      <label for="copWärmepumpe">COP Wärmepumpe:</label>
+      <input type="number" id="copWärmepumpe" value="4" min="0" step="0.1">
+
+    </div>
+    <!-- Ergebnisse-Container -->
+    <div id="result-container">
+      <h3>Ergebnisse</h3>
+      <p id="nutzbareFlaeche">Nutzbare Fläche [m²]: 0,00</p>
+      <p id="sondenAnzahl">Anzahl der Sonden: 0</p>
+      <p id="gesamteEntzugsleistung">Gesamte Entzugsleistung [kW]: 0,00</p>
+      <p id="heizleistung">Heizleistung [kW]: 0,00</p>
+      <p id="geothermischesPotenzial">Geothermisches Potenzial: -</p>
+      <p id="wärmeleitfähigkeit">Spezifische Wärmeleitfähigkeit [W/m·K]: -</p>
+      <p id="tiefenrestriktion">Tiefe der Holstein-Schichten [m]:</p>
+    </div>
+    <!-- Ergebnisse als PDF ausdrucken -->
+    <div id="export-container" style="margin: 10px;">
+        <div id="button-container" style="display: flex; gap: 10px; align-items: center;">
+          <button id="pdfButton">
+            Ergebnisse als PDF ausdrucken
+          </button>
+          <button id="exportGeoJSONButton" onclick="exportGEOJSON()" title="Sondenfeld als GeoJSON exportieren">
+            <i class="mdi mdi-table-arrow-down" style="font-size: 24px; color: white;"></i>
+          </button>
+          <button id="companionButton" onclick="window.open('https://geocheckcompanion.streamlit.app/', '_blank')" title="Start Geo-Check-Companion">
+            <i class="mdi mdi-home-floor-g" style="font-size: 24px; color: white;"></i>
+          </button>
+        </div>
+      </div>
+    <!-- Debug-Log-Container -->
+    <div id="debug-header" onclick="toggleDebugLog()">Debug-Log anzeigen</div>
+    <div id="debug-log-container">
+      <div id="debug-log"></div>
+    </div>
+    <!-- <div id="debug-header2" onclick="toggleDebug()">Debug-Funktionen anzeigen</div> -->
+    <div id="debug-container" class="collapsed">
+      <div id="button-container">
+        <button onclick="loadBuildings()">Gebäude laden</button>
+        <button onclick="loadTrees()">Bäume laden</button>
+        <button id="deleteButton" onclick="toggleDeleteMode()">Bestandselemente löschen</button>
+        <button onclick="generateGeothermalPoints()">Erdwärmesonde ermitteln</button>
+        <button onclick="bufferAll()">Gebäude und Bäume puffern</button>
+        <button onclick="adjustProbeArea()">Sondenarea anpassen</button>
+        <button onclick="showFeatureIds()">Feature-IDs anzeigen</button>
+      </div>
+    </div>
+    <div id="loading-indicator" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); background:white; padding:20px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.2); z-index:1000;">
+      <p style="margin:0;">Berechnung läuft, bitte warten...</p>
+    </div>
+
+
+  
+<!-- //////////// -->
+<!-- SKRIPTS -->
+<!-- //////////// -->  
+    <script>
+const helpText = `
+  <p><strong>🛠️ Polygon zur Berechnung des Sondenfelds zeichnen</strong><br>
+  Zeichnen Sie zunächst ein Polygon.
+  Verwenden Sie dazu das Zeichenwerkzeug 
+  (<span class="mdi mdi-pentagon" style="font-size: 16px; color: #003366;"></span>).
+  Klicken Sie auf die Karte, um die Eckpunkte zu setzen.
+  Schließen Sie das Polygon, indem Sie auf den ersten Punkt zurückklicken.
+  Danach klicken Sie auf <strong>„Erdwärmesonden aus Polygon ermitteln"</strong>, um die Berechnung zu starten.
+  </p>
+
+  <p><strong>🌳 Restriktionsflächen</strong><br>
+  Gebäude und Bäume werden <strong>automatisch</strong> berücksichtigt.
+  Zusätzlich können Sie eigene Restriktionsflächen definieren:
+  Wählen Sie im Dropdown-Menü den Eintrag 
+  <strong>„Restriktionsfläche zeichnen"</strong> aus und nutzen Sie anschließend das Zeichenwerkzeug 
+  (<span class="mdi mdi-pentagon" style="font-size: 16px; color: #003366;"></span>), um die Fläche einzuzeichnen.
+  </p>
+
+    <p><strong>🗺️ Weitere Kartenansichten auswählen</strong><br> 
+    Klicken Sie auf den Button mit dem Kartensymbol 
+    (<span class="mdi mdi-map-outline" style="font-size: 16px; color: #003366;"></span>),
+    um folgende Kartenansichten auszuwählen: Satellitenbilder, geothermisches Potenzial, 
+    Wärmeleitfähigkeit und Grundstücksgrenzen. </p>
+
+  <p><strong>🔄 Zurücksetzen der Karte</strong><br>
+  Mit dem <strong>Reset-Button</strong> (<span class="mdi mdi-restart" style="font-size: 16px; color: #003366;"></span>) 
+  werden alle Zeichnungen und Flächen auf der Karte gelöscht. Die Eingabeparameter bleiben dabei unverändert erhalten.
+  </p>
+
+<p><strong>📤 Ergebnisse exportieren</strong><br>
+ Am Ende der Seite können Sie die Ergebnisse als <strong>PDF</strong>
+ oder <strong>GeoJSON</strong> (für GIS-Software oder Geo-Check-Companion)
+ herunterladen. Einen Screenshot der Karte laden Sie mit dem Button
+ (<span class="mdi mdi-camera-outline" style="font-size: 16px; color: #003366;"></span>) herunter. </p>
+
+<p><strong>📉 Hinweis zur Berechnung</strong><br> Die Berechnung dient als <strong>grobe Abschätzung</strong> des geothermischen Potenzials. Die in den Eingabeparametern angegebene <strong>spezifische Entzugsleistung</strong> bezieht sich auf ein Standard-Sondenfeld mit 2 Sonden à 100 m Länge und 6 m Abstand, äquivalent zu einem Einfamilienhaus (vgl. Energieatlas Berlin). Die rechnerisch maximale Entzugsleistung wird mit einem <strong>Reduktionsfaktor</strong> multipliziert, der von der Anzahl der ermittelten Sonden abhängt und die gegenseitige thermische Beeinflussung der Sonden berücksichtigt. Für eine detailliertere Berechnung können Sie den <strong>Geo-Check-Companion</strong> verwenden.  </p>
+ <p><strong>🏠 Geo-Check-Companion</strong><br> Mit dem <strong>Geo-Check-Companion</strong> können Sie eine detailliertere Berechnung der Wärmeentzugsleistung durchführen. Exportieren Sie dazu zunächst das <strong>GeoJSON</strong> und klicken Sie anschließend auf den Button mit dem Haus-Symbol (<span class="mdi mdi-home-floor-g" style="font-size: 16px; color: #003366;"></span>), um die erweiterte Berechnungsplattform zu öffnen. </p>
+`;
+
+//Debug-Config
+        let isDebugMode = false; // xxxx Set to `true` to enable debug mode
+            // Karten-Initialisierung
+            const map = L.map('map', { 
+                maxZoom: 20, 
+                minZoom: 10 
+            }).setView([52.49825, 13.42135], 17);
+               
+//Search Tool
+        let searchResultPolygon = null; // Global variable to track the search polygon
+        L.Control.geocoder({
+            defaultMarkGeocode: false
+        })
+        .on('markgeocode', function(e) {
+            const bbox = e.geocode.bbox;
+            const poly = L.polygon([
+                [bbox.getSouthWest().lat, bbox.getSouthWest().lng],
+                [bbox.getSouthWest().lat, bbox.getNorthEast().lng],
+                [bbox.getNorthEast().lat, bbox.getNorthEast().lng],
+                [bbox.getNorthEast().lat, bbox.getSouthWest().lng],
+                [bbox.getSouthWest().lat, bbox.getSouthWest().lng]
+            ]).addTo(map);
+            // Remove the previous search polygon if it exists
+            if (searchResultPolygon) {
+                map.removeLayer(searchResultPolygon);
+            }
+            // Store the new search result polygon
+            searchResultPolygon = poly;
+            map.fitBounds(poly.getBounds());
+        })
+        .addTo(map);
+
+
+////////////
+// MAP INITIALISATION -->
+//////////// -->
+
+//Karten
+        // Standardkarten-Layer
+        const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { 
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors', 
+            maxNativeZoom: 19, 
+            maxZoom: 20 
+        });
+        // Satelliten-Layer (von Esri)
+        const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+            maxZoom: 20
+        });   
+        // WMS Layer hinzufügen
+        const wmsLayer = L.tileLayer.wms("https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?", {
+            layers: 'lb_geopot_2400100_fl',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.5,
+            attribution: '© Geoportal Berlin',
+            maxZoom: 20
+        });
+
+        // WMS Layer für Wärmeleitfähigkeit hinzufügen
+        const wmsLayerWarmeleitfahigkeit = L.tileLayer.wms("https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?", {
+            layers: 'lb_geopot_2400100_fl',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.5,
+            attribution: '© Geoportal Berlin',
+            maxZoom: 20
+        });
+
+        // ALKIS WFS Layer für Grundstücksgrenzen hinzufügen
+        const alkisLayer = L.tileLayer.wms("https://gdi.berlin.de/services/wfs/alkis_flurstuecke?", {
+            layers: 'alkis_flurstuecke:flurstuecke',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.7,
+            attribution: '© Geoportal Berlin',
+            maxZoom: 20
+        });
+
+        // Initialer Layer hinzufügen
+        streetLayer.addTo(map);
+      
+// Layer-Switcher LayerControl
+        const baseLayers = {
+            "Karte": streetLayer,
+            "Satellit": satelliteLayer
+        };   
+        const overlayMaps = {
+            "Geothermisches Potenzial, 100 m - 2400 h/a": wmsLayer,
+            "Spezifische Wärmeleitfähigkeit bis 100 m": wmsLayerWarmeleitfahigkeit,
+            "Grundstücksgrenzen (ALKIS)": alkisLayer
+        };
+        L.control.layers(baseLayers, overlayMaps).addTo(map);      
+      
+
+//Legende-Button
+      let legendButtonControl = null; // Variable zum Speichern des Legenden-Controls
+      let activeLayerName = null; // Variable to track which layer is currently active
+      map.on('overlayadd', function(e) {
+      if (e.name === "Geothermisches Potenzial, 100 m - 2400 h/a" || e.name === "Spezifische Wärmeleitfähigkeit bis 100 m") {
+        activeLayerName = e.name; // Store the active layer name
+        if (!legendButtonControl) {
+            legendButtonControl = L.control({ position: 'topright' });
+            legendButtonControl.onAdd = function () {
+                const button = L.DomUtil.create('button', 'toggle-legend leaflet-bar');
+                button.innerHTML = 'Legende';
+                button.onclick = function (event) {
+                    L.DomEvent.stopPropagation(event);
+                    const legend = document.getElementById('legend');
+                    const legendWarmeleitfahigkeit = document.getElementById('legend-warmeleitfahigkeit');
+                    
+                    // Hide both legends first
+                    legend.style.display = 'none';
+                    legendWarmeleitfahigkeit.style.display = 'none';
+                    
+                    // Show the appropriate legend based on the active layer name
+                    if (activeLayerName === "Geothermisches Potenzial, 100 m - 2400 h/a") {
+                        legend.style.display = (legend.style.display === 'none' || legend.style.display === '') ? 'block' : 'none';
+                    } else if (activeLayerName === "Spezifische Wärmeleitfähigkeit bis 100 m") {
+                        legendWarmeleitfahigkeit.style.display = (legendWarmeleitfahigkeit.style.display === 'none' || legendWarmeleitfahigkeit.style.display === '') ? 'block' : 'none';
+                    }
+                };
+                return button;
+            };
+        }
+        legendButtonControl.addTo(map);
+      }
+      });    
+      map.on('overlayremove', function(e) {
+      if (e.name === "Geothermisches Potenzial, 100 m - 2400 h/a" || e.name === "Spezifische Wärmeleitfähigkeit bis 100 m") {
+        if (legendButtonControl) {
+            map.removeControl(legendButtonControl);
+            // Hide both legends when layer is removed
+            const legend = document.getElementById('legend');
+            const legendWarmeleitfahigkeit = document.getElementById('legend-warmeleitfahigkeit');
+            if (legend) legend.style.display = 'none';
+            if (legendWarmeleitfahigkeit) legendWarmeleitfahigkeit.style.display = 'none';
+            activeLayerName = null; // Reset the active layer name
+        }
+      }
+      });
+      document.addEventListener("DOMContentLoaded", () => {
+      const legend = document.getElementById('legend');
+      const legendWarmeleitfahigkeit = document.getElementById('legend-warmeleitfahigkeit');
+      if (legend) {
+      legend.style.display = 'none'; // Sicherstellen, dass die Legende unsichtbar ist
+      }
+      if (legendWarmeleitfahigkeit) {
+      legendWarmeleitfahigkeit.style.display = 'none'; // Sicherstellen, dass die Legende unsichtbar ist
+      }
+      });
+    
+//Layers
+    var buildingLayer = L.layerGroup().addTo(map);
+    var treeLayer = L.layerGroup().addTo(map);
+    var drawnItems = new L.FeatureGroup().addTo(map);
+    var restrictionsLayer = L.layerGroup().addTo(map);
+    var bufferLayer = L.layerGroup().addTo(map); // Neuer Layer für Puffer
+    var geothermalPointsLayer = L.layerGroup().addTo(map);
+    var adjustedPolygonLayer = L.layerGroup().addTo(map);
+    var deleteModeActive = false;
+    let buildingIdCounter = 1; // Zähler für Gebäude-IDs
+    let treeIdCounter = 1;     // Zähler für Baum-IDs
+    let bufferIdCounter = 1;   // Zähler für Puffer-IDs
+// Screenshoter
+const screenshoter = L.simpleMapScreenshoter({
+    hidden: false, // Kein zusätzlicher Button auf der Karte
+    quality: 1,   // Maximale Bildqualität
+    });
+    map.addControl(screenshoter);
+//---------
+//Draw-Control
+//---------
+// Create a variable to track the currently active layer
+var activeLayer = drawnItems; // Default to drawnItems
+
+// Create a combined feature group for both layers to use with the edit control
+var editableFeatures = new L.FeatureGroup();
+map.addLayer(editableFeatures);
+
+// Make sure both layer collections are added to the editable features group
+drawnItems.eachLayer(function(layer) {
+    editableFeatures.addLayer(layer);
+});
+restrictionsLayer.eachLayer(function(layer) {
+    editableFeatures.addLayer(layer);
+});
+
+// Create a custom control for selecting the active layer
+var LayerSelectControl = L.Control.extend({
+    options: {
+        position: 'bottomleft'
+    },
+    
+    onAdd: function(map) {
+        // Create a clean container without the grey background
+        var container = L.DomUtil.create('div', 'layer-select-control');
+        
+        // Apply custom styling for a modern look
+        container.style.backgroundColor = 'white';
+        container.style.padding = '3px 0px';
+        container.style.borderRadius = '4px';
+        //container.style.boxShadow = '0 1px 5px rgba(0,0,0,0.2)';
+        container.style.border = '2px solid #ccc';
+        
+        // Create select dropdown with modern styling
+        var select = L.DomUtil.create('select', 'layer-select', container);
+        select.style.border = 'none';
+        select.style.borderRadius = '3px';
+        select.style.padding = '4px 8px';
+        select.style.fontSize = '14px';
+        //select.style.width = '120px';
+        select.style.outline = 'none';
+        select.style.cursor = 'pointer';
+        select.style.backgroundColor = 'white';
+        
+        // Add options
+        var optionDrawn = L.DomUtil.create('option', '', select);
+        optionDrawn.innerHTML = 'Sondenfeld zeichnen ';
+        optionDrawn.value = 'drawnItems';
+        
+        var optionRestrictions = L.DomUtil.create('option', '', select);
+        optionRestrictions.innerHTML = 'Restriktionsfläche zeichnen';
+        optionRestrictions.value = 'restrictionsLayer';
+        
+        // Add event listener
+        L.DomEvent.on(select, 'change', function(e) {
+            if (e.target.value === 'drawnItems') {
+                activeLayer = drawnItems;
+                // Reset draw options to default style
+                updateDrawOptions(false);
+            } else {
+                activeLayer = restrictionsLayer;
+                // Set draw options to orange style
+                updateDrawOptions(true);
+            }
+        });
+        
+        // Prevent map click events when interacting with the control
+        L.DomEvent.disableClickPropagation(container);
+        
+        return container;
+    }
+});
+
+// Function to update draw options based on selected layer
+function updateDrawOptions(isRestriction) {
+    // Remove existing draw control
+    if (drawControl) {
+        map.removeControl(drawControl);
+    }
+    
+    // Create new draw options
+    var drawOptions = {
+        draw: {
+            polyline: false,
+            polygon: {
+                shapeOptions: {
+                    color: isRestriction ? 'orange' : '#3388ff', // Changed from red to orange
+                    fillOpacity: 0.2
+                }
+            },
+            circle: false,
+            marker: false,
+            circlemarker: false,
+            rectangle: false
+        },
+        edit: {
+            featureGroup: editableFeatures // Use our combined feature group
+        }
+    };
+    
+    // Create and add new draw control
+    drawControl = new L.Control.Draw(drawOptions);
+    map.addControl(drawControl);
+}
+
+// Add the layer selection control to the map
+map.addControl(new LayerSelectControl());
+
+// Initial setup of draw control
+var drawControl;
+updateDrawOptions(false);
+
+// Handle the draw:created event
+map.on('draw:created', function(e) {
+    var layer = e.layer;
+    
+    // If we're adding to the restrictions layer, ensure the color is orange
+    if (activeLayer === restrictionsLayer) {
+        layer.setStyle({
+            color: 'orange',
+            fillColor: 'orange',
+            fillOpacity: 0.2
+        });
+    }
+    
+    // Add the new shape to the currently active layer
+    activeLayer.addLayer(layer);
+    
+    // Also add to our editable features group
+    editableFeatures.addLayer(layer);
+});
+
+// Handle the edit:deleted event
+map.on('draw:deleted', function(e) {
+    var layers = e.layers;
+    
+    layers.eachLayer(function(layer) {
+        drawnItems.removeLayer(layer);
+        restrictionsLayer.removeLayer(layer);
+        editableFeatures.removeLayer(layer);
+    });
+});
+
+// Handle the edit:edited event
+map.on('draw:edited', function(e) {
+    var layers = e.layers;
+    
+    layers.eachLayer(function(layer) {
+        // The layer is already updated in the editableFeatures group
+        // We don't need to do anything here, as the edits are automatically
+        // applied to the original layers
+    });
+});
+
+
+    
+
+    
+//Laden Parameter vom Nutzer
+    const params = getParameterValues();
+      
+// Funktion zum Ein- und Ausklappen des Debug-Containers
+      function toggleDebug() {
+      const debugContainer = document.getElementById('debug-container');
+      const debugHeader = document.getElementById('debug-header2');
+      if (debugContainer.classList.contains('expanded')) {
+        // Zuklappen
+        debugContainer.classList.remove('expanded');
+        debugContainer.classList.add('collapsed');
+        debugHeader.textContent = "Debug-Funktionen anzeigen";
+      } else {
+        // Aufklappen
+        debugContainer.classList.remove('collapsed');
+        debugContainer.classList.add('expanded');
+        debugHeader.textContent = "Debug-Funktionen ausblenden";
+      }
+      }
+    
+
+<!-- //////////// -->
+<!-- FUNCTIONS -->
+<!-- //////////// -->     
+      
+
+//Funktion zum Aktualisieren der Ergebnisse
+    function updateResults() {
+      const params = getParameterValues();
+      const anzahlSonden = geothermalPointsLayer.getLayers().length;
+      let reduktionsfaktor; //Reduktionsfaktor wegen Auswirkung mehrere BHEs gemäß Masterarbeit Tim Kröger, 2024
+      if (anzahlSonden <= 70) {
+        reduktionsfaktor = (159.863 - 12.547 * Math.log(100.761 * anzahlSonden - 141.675)) / 100;
+        } else {
+            reduktionsfaktor = 0.49;
+        }
+      const gesamteEntzugsleistung = anzahlSonden * params.sondenTiefe * params.spezEntzugsleistung * reduktionsfaktor / 1000;
+      const heizleistung = (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1);     
+      // Funktion zur Formatierung von Zahlen
+      function formatNumber(number) {
+        return number.toLocaleString('de-DE', { // 'de-DE' für deutsche Formatierung
+            minimumFractionDigits: 2, // Mindestens 2 Dezimalstellen
+            maximumFractionDigits: 2  // Maximal 2 Dezimalstellen
+        });
+      }
+      // Update results with black color
+      document.getElementById('sondenAnzahl').innerHTML = `Anzahl der Sonden: <span style="color: black">${anzahlSonden}</span>`;
+      document.getElementById('gesamteEntzugsleistung').innerHTML = 
+        `Gesamte Entzugsleistung [kW]: <span style="color: black">${formatNumber(gesamteEntzugsleistung)}</span>`;
+      document.getElementById('heizleistung').innerHTML = 
+        `Heizleistung [kW]: <span style="color: black">${formatNumber(heizleistung)}</span>`;
+      }
+      
+
+// Timer für Debbuging
+      // Timer variables
+      let processStartTime = null;
+      let lastTimestampTime = null;
+      // Function to start the timer
+      function startProcessTimer() {
+      processStartTime = performance.now();
+      lastTimestampTime = processStartTime; // Initialize the last timestamp
+      addDebugLog("Process timer started...");
+      }
+      // Function to log the total execution time
+      function stopProcessTimer() {
+      if (processStartTime !== null) {
+        const elapsedTime = performance.now() - processStartTime;
+        const elapsedSeconds = (elapsedTime / 1000).toFixed(2);
+        addDebugLog(`Process completed. Total execution time: ${elapsedSeconds} seconds.`);
+        processStartTime = null; // Reset the timer
+        lastTimestampTime = null; // Reset the last timestamp
+      } else {
+        addDebugLog("No timer was started. Unable to calculate execution time.");
+      }
+      }
+      // Function to log timestamps with elapsed time since start and last timestamp
+      function logTimestamp(message = "Timestamp recorded") {
+      if (processStartTime === null) {
+        addDebugLog("Timer has not started yet. Cannot log timestamp.");
+        return;
+      }
+      const currentTime = performance.now();
+      const timeSinceStart = ((currentTime - processStartTime) / 1000).toFixed(2);
+      const timeSinceLastTimestamp = lastTimestampTime
+        ? ((currentTime - lastTimestampTime) / 1000).toFixed(2)
+        : "0.00";
+      lastTimestampTime = currentTime; // Update the last timestamp
+      addDebugLog(`${message}: Time since start = ${timeSinceStart}s, since last timestamp = ${timeSinceLastTimestamp}s.`);
+      }
+      
+ //Loading indicator
+      function showLoadingIndicator() {
+      document.getElementById("loading-indicator").style.display = "block";
+      }
+      function hideLoadingIndicator() {
+      document.getElementById("loading-indicator").style.display = "none";
+      }
+      
+<!-- //////////// -->
+<!-- BERECHNUNGSPROZESS -->
+<!-- //////////// -->   
+      function executeFullProcess() {
+        showLoadingIndicator();
+          // Start the timer
+          startProcessTimer();
+          addDebugLog("Starte den vollständigen Erdwärmesondenprozess...");
+          // Remove the search result polygon if it exists
+		if (searchResultPolygon) {
+			map.removeLayer(searchResultPolygon);
+			searchResultPolygon = null; // Clear the reference
+			addDebugLog("Suchpolygon entfernt.");
+		}
+        geothermalPointsLayer.clearLayers();
+              // Clear old adjusted polygons
+        adjustedPolygonLayer.clearLayers();
+              // Setze die Ergebnisse zurück
+      document.getElementById("sondenAnzahl").textContent = "Anzahl der Sonden: 0";
+      document.getElementById("gesamteEntzugsleistung").textContent = "Gesamte Entzugsleistung [kW]: 0,00";
+      document.getElementById("heizleistung").textContent = "Heizleistung [kW]: 0,00";
+      addDebugLog("Ergebnisse wurden zurückgesetzt.");
+          // Prüfen, ob ein Nutzerpolygon existiert
+          let userPolygon;
+          drawnItems.eachLayer(function (layer) {
+              if (layer instanceof L.Polygon) {
+                  userPolygon = layer;
+              }
+          });
+          if (!userPolygon) {
+              addDebugLog("Kein Nutzerpolygon gefunden. Der Prozess wird nicht gestartet.");
+              showErrorDialog(`
+                Es wurde kein Polygon gefunden. Bitte zeichnen Sie ein Polygon, 
+                indem Sie das Zeichenwerkzeug oben links auf der Karte 
+                (<span class="mdi mdi-pentagon" style="font-size: 16px; color: #003366;"></span>) verwenden. 
+                Wählen Sie das Werkzeug, klicken Sie auf die Karte, um die Eckpunkte zu setzen, 
+                und schließen Sie das Polygon durch Klicken auf den ersten Punkt. Anschließend können Sie den Prozess erneut starten.
+            `);
+			  hideLoadingIndicator();
+              return;
+          }
+          // Zentrieren auf die Nutzer-Polygone
+          let polygonBounds = new L.LatLngBounds();
+          drawnItems.eachLayer(function (layer) {
+              if (layer instanceof L.Polygon) {
+                  polygonBounds.extend(layer.getBounds());
+              }
+          });
+          if (polygonBounds.isValid()) {
+              const padding = 0.01; // Zusätzlicher Platz um die Polygone
+              const boundsWithPadding = polygonBounds.pad(padding);
+              map.fitBounds(boundsWithPadding); // Zentrieren und Zoomen
+              addDebugLog("Karte auf Nutzer-Polygone zentriert.");
+          } else {
+              addDebugLog("Kein gültiger Bereich für Nutzer-Polygone. Zentrieren übersprungen.");
+          }
+          // Lade Gebäude nach Abschluss des Zentrierens
+          map.whenReady(() => {
+              setTimeout(() => {
+                  addDebugLog("Karte bereit. Lade Gebäude basierend auf neuer Ansicht...");
+                  loadBuildings();
+                  // Fortsetzung des Prozesses
+                  setTimeout(() => {
+                      addDebugLog("Gebäude geladen. Bäume laden...");
+                      loadTrees();
+      	  logTimestamp("Gebäude geladen. Bäume laden...");    
+                      setTimeout(() => {
+                          addDebugLog("Bäume geladen. Puffern...");
+                          bufferAll();
+        logTimestamp("gepuffert");
+                          setTimeout(() => {
+                              addDebugLog("Puffern abgeschlossen. Sondenfläche anpassen...");
+                              adjustProbeArea();
+      	  logTimestamp("area adjusted");
+                              setTimeout(() => {
+                                  addDebugLog("Sondenfläche angepasst. Sondenpunkte generieren...");
+                                  generateGeothermalPoints();
+      		  logTimestamp("sonden generated");
+                                  setTimeout(() => {
+                                      addDebugLog("Lösche alle anderen Elemente außer den Sonden...");
+                                      clearAllExceptSonden();
+                      checkPotenzial();
+                      checkThermalConductivity();
+                                      addDebugLog("Vollständiger Prozess abgeschlossen.");
+                                        // Stop the timer
+                                stopProcessTimer();
+      		hideLoadingIndicator();
+                                  }, 1000);
+                              }, 1000);
+                          }, 1000);
+                      }, 1000);
+                  }, 1000);
+              }, 500); // Kleine Verzögerung für die Kartenaktualisierung
+          });   
+      }
+     
+      
+//Funktion zum pufferm der Polyon Area
+      function getUserPolygonsBoundingBox(marginMeters = 100) {
+      let bounds = new L.LatLngBounds();
+      drawnItems.eachLayer(function (layer) {
+        if (layer instanceof L.Polygon) {
+            bounds.extend(layer.getBounds());
+        }
+      });
+      if (!bounds.isValid()) {
+        console.error("No user polygons found.");
+        return null;
+      }
+      // Convert margin from meters to degrees (approximation)
+      const latMargin = marginMeters / 111320; // ~111.32 km per degree latitude
+      const lngMargin = marginMeters / (111320 * Math.cos(bounds.getCenter().lat * Math.PI / 180));
+      return [
+        bounds.getSouthWest().lat - latMargin,
+        bounds.getSouthWest().lng - lngMargin,
+        bounds.getNorthEast().lat + latMargin,
+        bounds.getNorthEast().lng + lngMargin
+      ];
+      }
+      
+
+
+//Funktion zum lesen des Potenzials in Geoportal
+      function checkPotenzial() {
+      try {
+        addDebugLog("Starte Überprüfung des geothermischen Potenzials...");
+        if (!geothermalPointsLayer || geothermalPointsLayer.getLayers().length === 0) {
+            addDebugLog("Keine Sonden gefunden. Prozess kann nicht fortgesetzt werden.");
+            const resultElement = document.getElementById("geothermischesPotenzial");
+            resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Keine Daten.`;
+            resultElement.style.color = "black";
+            return;
+        }
+        // Check if there is a single user polygon
+        let userPolygons = [];
+        drawnItems.eachLayer((layer) => {
+            if (layer instanceof L.Polygon) {
+                userPolygons.push(layer);
+            }
+        });
+        if (userPolygons.length > 1) {
+            addDebugLog("Mehrere Polygone gefunden. Direkte Ergebnisse anzeigen.");
+            const resultElement = document.getElementById("geothermischesPotenzial");
+            resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> mehrere Polygone, bitte prüfen Sie die Karte des geothermischen Potenzial und der Restriktionsflächen.`;
+            resultElement.style.color = "black";
+            return;
+        }
+        if (userPolygons.length === 0) {
+            addDebugLog("Kein gültiges Polygon gefunden. Prozess kann nicht fortgesetzt werden.");
+            const resultElement = document.getElementById("geothermischesPotenzial");
+            resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Keine Daten.`;
+            resultElement.style.color = "black";
+            return;
+        }
+        // Use the single polygon
+        const polygon = userPolygons[0];
+        const polygonCenter = polygon.getBounds().getCenter();
+        // Find the closest sonde to the polygon center
+        let closestSonde = null;
+        let minDistance = Infinity;
+        geothermalPointsLayer.eachLayer((sonde) => {
+            const sondeLatLng = sonde.getLatLng();
+            const distance = polygonCenter.distanceTo(sondeLatLng); // Calculate distance in meters
+            if (distance < minDistance) {
+                minDistance = distance;
+                closestSonde = sonde;
+            }
+        });
+        if (!closestSonde) {
+            addDebugLog("Keine nahegelegene Sonde gefunden.");
+            const resultElement = document.getElementById("geothermischesPotenzial");
+            resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Keine Daten.`;
+            resultElement.style.color = "black";
+            return;
+        }
+        const { lat, lng } = closestSonde.getLatLng();
+        addDebugLog(`Nächste Sonde: Lat=${lat}, Lng=${lng}, Entfernung=${minDistance.toFixed(2)}m`);
+
+        // First check local GeoJSON file for depth restriction
+        fetch('https://afanegas.github.io/geocheck_docs/holstein_depth_restr_fan_4326.geojson')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                // Create a point for the sonde location (already in correct CRS)
+                const sondePoint = turf.point([lng, lat]);
+                let localValue = "Keine Restriktion"; // Default value
+                
+                addDebugLog(`Checking point at coordinates: [${lng}, ${lat}]`);
+                addDebugLog(`Total features in GeoJSON: ${data.features.length}`);
+                
+                // Check each feature in the GeoJSON
+                data.features.forEach((feature, index) => {
+                    addDebugLog(`Checking feature ${index + 1}`);
+                    
+                    // Log the feature's coordinates
+                    if (feature.geometry && feature.geometry.coordinates) {
+                        const coords = feature.geometry.coordinates[0][0];
+                        addDebugLog(`Feature ${index + 1} coordinates: [${coords[0]}, ${coords[1]}]`);
+                    }
+                    
+                    if (turf.booleanPointInPolygon(sondePoint, feature)) {
+                        // If point is inside polygon, get the value
+                        localValue = Math.round(feature.properties.Holstein_depth_m);
+                        addDebugLog(`Point is inside feature ${index + 1}`);
+                        addDebugLog(`Found value in properties: ${JSON.stringify(feature.properties)}`);
+                    }
+                });
+
+                // Update the depth restriction result element
+                const depthElement = document.getElementById("tiefenrestriktion");
+                depthElement.innerHTML = `<span style="color:black;">Tiefe der Holstein-Schichten [m]:</span> ${localValue}`;
+                addDebugLog(`Final depth restriction value: ${localValue}m`);
+            })
+            .catch(error => {
+                addDebugLog(`Error reading GeoJSON file: ${error.message}`);
+                // Set default value on error
+                const depthElement = document.getElementById("tiefenrestriktion");
+                depthElement.innerHTML = `<span style="color:black;">Tiefe der Holstein-Schichten [m]:</span> Keine Restriktion`;
+            });
+
+        // WMS Query for the closest sonde
+        const wmsUrl = "https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?";
+        const layerName = "lb_geopot_2400100_fl";
+        const wmsQueryUrl = `${wmsUrl}SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo&QUERY_LAYERS=${layerName}&LAYERS=${layerName}&STYLES=&INFO_FORMAT=text/xml&SRS=EPSG:4326&X=50&Y=50&WIDTH=101&HEIGHT=101&BBOX=${lng - 0.0005},${lat - 0.0005},${lng + 0.0005},${lat + 0.0005}`;
+        fetch(wmsQueryUrl)
+            .then((response) => {
+                if (!response.ok) throw new Error("Fehler beim Abrufen der WMS-Daten.");
+                return response.text();
+            })
+            .then((text) => {
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(text, "text/xml");
+      
+                const interestingAttributes = {
+                    "ua_geothermisches_potenzial:restrikt_wsg": {
+                        name: "Erdwärmenutzung nicht erlaubt in Wasserschutzgebieten",
+                        color: "red",
+                    },
+                    "ua_geothermisches_potenzial:restrikt_gwl2": {
+                        name: "Erdwärmenutzung mit Einschränkungen erlaubt in Bereichen mit erhöhten Salzkonzentrationen im Grundwasser oberhalb der Holstein-Schichten (s. Tiefe der Holstein-Schichten)",
+                        color: "orange",
+                    },
+                    "ua_geothermisches_potenzial:restrikt_gwl34": {
+                        name: "Erdwärmenutzung mit Einschränkungen erlaubt in Bereichen mit erhöhten Salzkonzentrationen im Grundwasser unterhalb der Holstein-Schichten (s. Tiefe der Holstein-Schichten)",
+                        color: "orange",
+                    },
+                    "ua_geothermisches_potenzial:restrikt_gespanntes": {
+                        name: "Erdwärmenutzung mit Einschränkungen erlaubt in Bereichen mit artesisch gespanntem Grundwasser",
+                        color: "orange",
+                    },
+                    "ua_geothermisches_potenzial:restrikt_rupelton": {
+                        name: "Erdwärmenutzung mit Einschränkungen erlaubt in Bereichen von Rupeltonhochlagen",
+                        color: "orange",
+                    },
+                };
+                let entzug = null;
+                let restriction = {
+                    name: "Erdwärmenutzung grundsätzlich erlaubt",
+                    color: "green",
+                };
+                const featureMembers = xmlDoc.getElementsByTagName("gml:featureMember");
+                if (featureMembers.length > 0) {
+                    Array.from(featureMembers).forEach((feature) => {
+                        const attributes = feature.getElementsByTagName("*");
+      
+                        Array.from(attributes).forEach((attr) => {
+                            const tagName = attr.tagName;
+                            const value = attr.textContent.trim();
+      
+                            if (tagName === "ua_geothermisches_potenzial:entzug") {
+                                entzug = value;
+                            } else if (interestingAttributes[tagName] && value === "vorhanden") {
+                                restriction = interestingAttributes[tagName];
+                            }
+                        });
+                    });
+                    const resultElement = document.getElementById("geothermischesPotenzial");
+                    if (entzug) {
+                        const resultHTML = `<span style="color:black;">Geothermisches Potenzial:</span> ${restriction.name}. Spezifische Entzugsleistung: ${entzug} W/m (Lastfall eines Einfamilienhauses, vgl. Energieatlas)`;
+                        addDebugLog(`Geothermisches Potenzial: ${resultHTML}`);
+                        resultElement.innerHTML = resultHTML;
+                        resultElement.style.color = restriction.color;
+                    } else {
+                        addDebugLog("Entzugswert nicht gefunden.");
+                        resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Keine vollständigen Daten.`;
+                        resultElement.style.color = "black";
+                    }
+                } else {
+                    addDebugLog("Keine interessanten geothermischen Potenzialdaten gefunden.");
+                    const resultElement = document.getElementById("geothermischesPotenzial");
+                    resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Keine Daten.`;
+                    resultElement.style.color = "black";
+                }
+            })
+            .catch((error) => {
+                addDebugLog(`Fehler bei der WMS-Abfrage: ${error.message}`);
+                const resultElement = document.getElementById("geothermischesPotenzial");
+                resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Fehler.`;
+                resultElement.style.color = "black";
+            });
+      } catch (error) {
+        addDebugLog(`Fehler bei der Überprüfung des geothermischen Potenzials: ${error.message}`);
+        const resultElement = document.getElementById("geothermischesPotenzial");
+        resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> Fehler.`;
+        resultElement.style.color = "black";
+      }
+      }
+
+      function checkThermalConductivity() {
+        try {
+          addDebugLog("Starte Überprüfung der Wärmeleitfähigkeit...");
+          if (!geothermalPointsLayer || geothermalPointsLayer.getLayers().length === 0) {
+              addDebugLog("Keine Sonden gefunden. Prozess kann nicht fortgesetzt werden.");
+              const resultElement = document.getElementById("wärmeleitfähigkeit");
+              if (resultElement) {
+                resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+              }
+              return;
+          }
+
+          // Check if there is a single user polygon
+          let userPolygons = [];
+          drawnItems.eachLayer((layer) => {
+              if (layer instanceof L.Polygon) {
+                  userPolygons.push(layer);
+              }
+          });
+
+          if (userPolygons.length === 0) {
+              addDebugLog("Kein gültiges Polygon gefunden. Prozess kann nicht fortgesetzt werden.");
+              const resultElement = document.getElementById("wärmeleitfähigkeit");
+              if (resultElement) {
+                resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+              }
+              return;
+          }
+
+          // Use the single polygon
+          const polygon = userPolygons[0];
+          const polygonCenter = polygon.getBounds().getCenter();
+
+          // Find the closest sonde to the polygon center
+          let closestSonde = null;
+          let minDistance = Infinity;
+          geothermalPointsLayer.eachLayer((sonde) => {
+              const sondeLatLng = sonde.getLatLng();
+              const distance = polygonCenter.distanceTo(sondeLatLng);
+              if (distance < minDistance) {
+                  minDistance = distance;
+                  closestSonde = sonde;
+              }
+          });
+
+          if (!closestSonde) {
+              addDebugLog("Keine nahegelegene Sonde gefunden.");
+              const resultElement = document.getElementById("wärmeleitfähigkeit");
+              if (resultElement) {
+                resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+              }
+              return;
+          }
+
+          const { lat, lng } = closestSonde.getLatLng();
+          addDebugLog(`Nächste Sonde: Lat=${lat}, Lng=${lng}, Entfernung=${minDistance.toFixed(2)}m`);
+
+          // WMS Query for thermal conductivity
+          const wmsUrl = "https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?";
+          const layerName = "db_geopot_wlf100_fl";
+          const wmsQueryUrl = `${wmsUrl}SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo&QUERY_LAYERS=${layerName}&LAYERS=${layerName}&STYLES=&INFO_FORMAT=text/xml&SRS=EPSG:4326&X=50&Y=50&WIDTH=101&HEIGHT=101&BBOX=${lng - 0.0005},${lat - 0.0005},${lng + 0.0005},${lat + 0.0005}`;
+
+          fetch(wmsQueryUrl)
+              .then((response) => {
+                  if (!response.ok) throw new Error("Fehler beim Abrufen der WMS-Daten.");
+                  return response.text();
+              })
+              .then((text) => {
+                  addDebugLog(`WMS Response: ${text}`); // Log the raw response
+                  const parser = new DOMParser();
+                  const xmlDoc = parser.parseFromString(text, "text/xml");
+
+                  const featureMembers = xmlDoc.getElementsByTagName("gml:featureMember");
+                  if (featureMembers.length > 0) {
+                      let wlfRange = null;
+                      Array.from(featureMembers).forEach((feature) => {
+                          const attributes = feature.getElementsByTagName("*");
+                          Array.from(attributes).forEach((attr) => {
+                              addDebugLog(`Found attribute: ${attr.tagName} = ${attr.textContent}`); // Log each attribute
+                              if (attr.tagName === "ua_geothermisches_potenzial:wlf" || 
+                                  attr.tagName === "wlf" || 
+                                  attr.tagName === "ua_geothermisches_potenzial:WÄRMELEITFÄHIGKEIT") {
+                                  wlfRange = attr.textContent.trim();
+                              }
+                          });
+                      });
+
+                      const resultElement = document.getElementById("wärmeleitfähigkeit");
+                      if (resultElement && wlfRange) {
+                          // Parse the range format "> 2,4 - 2,6"
+                          const rangeMatch = wlfRange.match(/>\s*(\d+[,.]\d+)\s*-\s*(\d+[,.]\d+)/);
+                          if (rangeMatch) {
+                              addDebugLog(`Wärmeleitfähigkeit gefunden: ${wlfRange}`);
+                              resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> ${wlfRange}`;
+                          } else {
+                              addDebugLog(`Unerwartetes Format für Wärmeleitfähigkeit: ${wlfRange}`);
+                              resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+                          }
+                      } else {
+                          addDebugLog("Element 'wärmeleitfähigkeit' nicht gefunden oder keine Wärmeleitfähigkeitsdaten vorhanden.");
+                          if (resultElement) {
+                              resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+                          }
+                      }
+                  } else {
+                      addDebugLog("Keine Wärmeleitfähigkeitsdaten gefunden.");
+                      const resultElement = document.getElementById("wärmeleitfähigkeit");
+                      if (resultElement) {
+                          resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+                      }
+                  }
+              })
+              .catch((error) => {
+                  addDebugLog(`Fehler bei der WMS-Abfrage: ${error.message}`);
+                  const resultElement = document.getElementById("wärmeleitfähigkeit");
+                  if (resultElement) {
+                      resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+                  }
+              });
+        } catch (error) {
+          addDebugLog(`Fehler bei der Überprüfung der Wärmeleitfähigkeit: ${error.message}`);
+          const resultElement = document.getElementById("wärmeleitfähigkeit");
+          if (resultElement) {
+              resultElement.innerHTML = `<span style="color:black;">Spezifische Wärmeleitfähigkeit [W/m·K]:</span> -`;
+          }
+        }
+      }
+
+//Function Error Dialog  (fixed Content)  
+function showErrorDialog(errorText) {
+    const dialog = document.createElement('div');
+    dialog.style.position = 'fixed';
+    dialog.style.top = '50%';
+    dialog.style.left = '50%';
+    dialog.style.transform = 'translate(-50%, -50%)';
+    dialog.style.padding = '20px';
+    dialog.style.backgroundColor = '#fff';
+    dialog.style.boxShadow = '0 2px 10px rgba(0, 0, 0, 0.2)';
+    dialog.style.borderRadius = '8px';
+    dialog.style.textAlign = 'center';
+    dialog.style.zIndex = '1000';
+    dialog.style.width = '70%'; // Set width to 70%
+    dialog.style.maxWidth = '2000px'; // Optional: Add a max-width to prevent it from getting too wide on very large screens
+
+
+    dialog.innerHTML = `<p>${errorText}</p>`;
+
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Schließen';
+    closeButton.style.marginTop = '10px';
+    closeButton.style.padding = '10px 20px';
+    closeButton.style.backgroundColor = '#003366';
+    closeButton.style.color = '#fff';
+    closeButton.style.border = 'none';
+    closeButton.style.borderRadius = '4px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.fontSize = '16px'
+    closeButton.addEventListener('click', () => {
+        document.body.removeChild(dialog);
+    });
+
+    dialog.appendChild(closeButton);
+    document.body.appendChild(dialog);
+}
+
+//Funktion zum laden der Parameter vom Nutzer
+      function getParameterValues() {
+        const sondenAbstand = parseFloat(document.getElementById('sondenAbstand').value).toFixed(2);
+        const gebäudeAbstand = parseFloat(document.getElementById('gebäudeAbstand').value).toFixed(2);
+        const bäumeAbstand = parseFloat(document.getElementById('bäumeAbstand').value).toFixed(2);
+        const restriktionAbstand = parseFloat(document.getElementById('restriktionAbstand').value).toFixed(2);
+        const sondenTiefe = parseFloat(document.getElementById('sondenTiefe').value).toFixed(2);
+        const spezEntzugsleistung = parseFloat(document.getElementById('spezEntzugsleistung').value).toFixed(2);
+        const copWärmepumpe = parseFloat(document.getElementById('copWärmepumpe').value).toFixed(2);
+      
+        return { 
+            sondenAbstand: parseFloat(sondenAbstand), 
+            gebäudeAbstand: parseFloat(gebäudeAbstand), 
+            bäumeAbstand: parseFloat(bäumeAbstand), 
+            restriktionAbstand: parseFloat(restriktionAbstand), 
+            sondenTiefe: parseFloat(sondenTiefe), 
+            spezEntzugsleistung: parseFloat(spezEntzugsleistung),
+            copWärmepumpe: parseFloat(copWärmepumpe)
+        };
+      }
+
+//Funktion Entfernen nach Berechnung    
+      function clearAllExceptSonden() {
+      // Entfernt alle Gebäude
+      buildingLayer.clearLayers();
+      addDebugLog("Gebäude von der Karte entfernt.");
+      // Entfernt alle Bäume
+      treeLayer.clearLayers();
+      addDebugLog("Bäume von der Karte entfernt.");
+      // Entfernt alle Puffer
+      bufferLayer.clearLayers();
+      addDebugLog("Puffer von der Karte entfernt.");  
+      // Entfernt alle gezeichneten Polygone
+      <!-- drawnItems.clearLayers(); -->
+      <!-- addDebugLog("Benutzerdefinierte Polygone von der Karte entfernt."); -->
+      }
+      
+//Funktion Laden Gebäude
+      function loadBuildings() {
+      buildingLayer.clearLayers();
+      const bbox = getUserPolygonsBoundingBox(50); // 50-meter margin
+      if (!bbox) {
+        console.error("No valid bounding box for user polygons.");
+        return;
+      }     
+      const [south, west, north, east] = bbox;
+      const query = `
+        [out:json];
+        (
+            way["building"](${south},${west},${north},${east});
+        );
+        out body;
+        >;
+        out skel qt;
+      `;     
+      fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+      })
+        .then(response => response.json())
+        .then(data => {
+            data.elements.forEach(element => {
+                if (element.type === 'way' && element.nodes) {
+                    const latlngs = element.nodes.map(nodeId => {
+                        const node = data.elements.find(el => el.type === 'node' && el.id === nodeId);
+                        return [node.lat, node.lon];
+                    });
+                    const polygon = L.polygon(latlngs, { color: 'blue' });
+      
+                    // Assign unique ID and add to building layer
+                    polygon._id = `G${buildingIdCounter++}`;
+                    polygon.feature = { properties: { id: polygon._id } };
+                    polygon.on('click', handleFeatureClick);
+                    polygon.addTo(buildingLayer);
+                }
+            });
+            addDebugLog("Gebäude erfolgreich geladen.");
+        })
+        .catch(error => addDebugLog("Fehler beim Laden der Gebäude: " + error.message));
+      }
+
+//Funktion Laden von Bäumen
+      function loadTrees() {
+      treeLayer.clearLayers();
+      
+      const bbox = getUserPolygonsBoundingBox(50); // 50-meter margin
+      if (!bbox) {
+        console.error("No valid bounding box for user polygons.");
+        return;
+      }
+      
+      const [south, west, north, east] = bbox;
+      const query = `
+        [out:json];
+        (
+            node["natural"="tree"](${south},${west},${north},${east});
+        );
+        out body;
+      `;      
+      fetch('https://overpass-api.de/api/interpreter', {
+        method: 'POST',
+        body: 'data=' + encodeURIComponent(query)
+      })
+        .then(response => response.json())
+        .then(data => {
+            data.elements.forEach(element => {
+                if (element.type === 'node' && element.lat && element.lon) {
+                    const latlng = [element.lat, element.lon];
+                    const marker = L.circleMarker(latlng, { color: 'green', radius: 5 });
+      
+                    // Assign unique ID and add to tree layer
+                    marker._id = `T${treeIdCounter++}`;
+                    marker.feature = { properties: { id: marker._id } };
+                    marker.on('click', handleFeatureClick);
+                    marker.addTo(treeLayer);
+                }
+            });
+            addDebugLog("Bäume erfolgreich geladen.");
+        })
+        .catch(error => addDebugLog("Fehler beim Laden der Bäume: " + error.message));
+      }
+      
+//Function HandleFeatureClick  
+      function handleFeatureClick(e) {
+
+        }
+         
+
+//Funtion Debug hinzufugen
+      function addDebugLog(message) {
+      if (!isDebugMode) return; // Skip if debug mode is off
+      const debugLog = document.getElementById('debug-log');
+      if (debugLog) {
+        const logEntry = document.createElement('div');
+        logEntry.textContent = message;
+        debugLog.appendChild(logEntry);
+      }
+      }
+
+//------------
+//Funktion zeichnen sonden
+//------------
+      function generateGeothermalPoints() {
+      try {
+        addDebugLog("Starting optimization of geothermal probe points with horizontal, vertical shifts, and top 10 angles...");
+        // Retrieve all adjusted polygons from the map
+        let adjustedPolygons = [];
+        map.eachLayer(function (layer) {
+            if (
+                layer.feature &&
+                layer.feature.geometry &&
+                (layer.feature.geometry.type === "Polygon" || layer.feature.geometry.type === "MultiPolygon")
+            ) {
+                adjustedPolygons.push(layer.toGeoJSON());
+            }
+        });
+        if (adjustedPolygons.length === 0) {
+            addDebugLog("No adjusted polygons found. The process cannot continue.");
+            return;
+        }
+        const sondenAbstand = parseFloat(document.getElementById('sondenAbstand').value);
+        if (isNaN(sondenAbstand) || sondenAbstand <= 0) {
+            addDebugLog("Invalid probe spacing. Please enter a valid value.");
+            return;
+        }
+        addDebugLog(`Probe spacing: ${sondenAbstand} meters.`);
+        geothermalPointsLayer.clearLayers(); // Clear previous geothermal points
+        // Check the number of sub-polygons
+        let totalSubPolygons = 0;
+        adjustedPolygons.forEach((geoJSONPolygon) => {
+            if (geoJSONPolygon.geometry.type === "MultiPolygon") {
+                totalSubPolygons += geoJSONPolygon.geometry.coordinates.length;
+            } else if (geoJSONPolygon.geometry.type === "Polygon") {
+                totalSubPolygons += 1;
+            }
+        });
+        // If the total number of sub-polygons exceeds Max, show a warning message
+      const MAX_SUBPOLYGONS = 30; // Define the threshold as a constant
+        if (totalSubPolygons > MAX_SUBPOLYGONS) {
+            showErrorDialog(
+                `Die Anzahl der resultierenden Teilflächen (${totalSubPolygons}) ist zu hoch. Bitte zeichnen Sie ein kleineres Polygon (max. ${MAX_SUBPOLYGONS} Teilflächen), um den Prozess fortzusetzen.`
+            );
+            addDebugLog(`Too many sub-polygons (${totalSubPolygons}). Process aborted.`);
+            return;
+        }
+        // Process each polygon separately
+        adjustedPolygons.forEach((geoJSONPolygon, polygonIndex) => {
+            const polygons = geoJSONPolygon.geometry.type === "MultiPolygon"
+                ? geoJSONPolygon.geometry.coordinates.map(coords => turf.polygon(coords))
+                : [turf.polygon(geoJSONPolygon.geometry.coordinates)];
+            polygons.forEach((polygon, subPolygonIndex) => {
+                const outerRing = polygon.geometry.coordinates[0];
+                if (!outerRing || outerRing.length < 4) {
+                    addDebugLog(`Polygon ${polygonIndex + 1}.${subPolygonIndex + 1} has fewer than 4 positions. Skipping.`);
+                    return;
+                }
+                // Ensure the outer ring is counter-clockwise
+                if (turf.booleanClockwise(outerRing)) {
+                    outerRing.reverse();
+                    addDebugLog(`Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Coordinates reversed to counter-clockwise.`);
+                }
+                addDebugLog(`Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Processing started.`);
+                // Compute the 2 longest lines of the polygon
+                const lineSegments = [];
+                for (let i = 0; i < outerRing.length - 1; i++) {
+                    const start = turf.point(outerRing[i]);
+                    const end = turf.point(outerRing[i + 1]);
+                    const line = turf.lineString([outerRing[i], outerRing[i + 1]]);
+                    const length = turf.length(line, { units: 'meters' });
+                    lineSegments.push({ line, length, start, end });
+                }
+                // Sort by length and select the top 2 longest lines
+                lineSegments.sort((a, b) => b.length - a.length);
+                const topLines = lineSegments.slice(0, 2);
+      
+                // Extract angles of the top lines
+      const angles = topLines.map(({ start, end }) => {
+      const startCoord = start.geometry.coordinates;
+      const endCoord = end.geometry.coordinates;
+      const angle = turf.bearing(turf.point(startCoord), turf.point(endCoord));
+      const normalizedAngle = angle >= 0 ? angle : angle + 360; // Normalize to [0, 360)
+      return normalizedAngle;
+      });
+                addDebugLog(`Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Top 2 angles (sorted by length): ${angles.join(', ')}.`);     
+                // Generate the initial grid within the polygon's bounding box
+                // Calculate the center of mass
+      const centerOfMass = turf.centerOfMass(polygon);  
+      // Compute the radius of a circle that fully encloses the polygon
+      const bbox = turf.bbox(polygon);
+      const [minX, minY, maxX, maxY] = bbox;
+      const diagonalDistance = Math.sqrt(
+      Math.pow(maxX - minX, 2) + Math.pow(maxY - minY, 2)
+      );
+      const margin = diagonalDistance / 2;    
+      // Expand the bounding box
+      const expandedBbox = [
+      minX - margin,
+      minY - margin,
+      maxX + margin,
+      maxY + margin,
+      ];   
+      // Create a larger grid
+      const grid = turf.pointGrid(expandedBbox, sondenAbstand, { units: "meters" });
+      
+                const initialPointsInside = grid.features.filter((point) =>
+                    turf.booleanPointInPolygon(point, polygon)
+                );
+      
+                addDebugLog(
+                    `Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Initial test shows ${initialPointsInside.length} points inside polygon.`
+                );
+      
+                if (initialPointsInside.length > 500) {
+                    addDebugLog(
+                        `Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Exceeds 500 points in initial test. Skipping further shifts.`
+                    );
+                    // Add the initial points to the map
+                    initialPointsInside.forEach((point) => {
+                        const [lng, lat] = point.geometry.coordinates;
+                        L.circleMarker([lat, lng], {
+                            radius: 2,
+                            color: "red",
+                        }).addTo(geothermalPointsLayer);
+                    });
+                    return;
+                }
+                // Shift and test angles for the grid
+                const stepSize = sondenAbstand / 12; // Step size is 1/12th of the spacing
+                const maxShiftSteps = Math.ceil((sondenAbstand / 2) / stepSize); // Shift up to half the spacing
+                let maxPointsInside = 0;
+                let bestConfiguration = { angle: 0, shiftX: 0, shiftY: 0, points: [] };
+      
+                for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
+                    for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
+                        const shiftX = xShiftStep * stepSize;
+                        const shiftY = yShiftStep * stepSize;
+      
+                        const shiftedGrid = turf.transformTranslate(
+                            turf.transformTranslate(grid, shiftX, 90, { units: "meters" }),
+                            shiftY, 0, { units: "meters" }
+                        );
+      
+                        angles.forEach((angle) => {
+                            const rotatedGrid = turf.transformRotate(shiftedGrid, angle, { pivot: turf.centerOfMass(polygon) });
+                            const pointsInside = rotatedGrid.features.filter((point) =>
+                                turf.booleanPointInPolygon(point, polygon)
+                            );
+      
+                            addDebugLog(
+                                `Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}, ShiftX ${(shiftX).toFixed(2)}m, ShiftY ${(shiftY).toFixed(2)}m, Angle ${angle.toFixed(2)}°: ${pointsInside.length} points inside polygon.`
+                            );
+      
+                            if (pointsInside.length > maxPointsInside) {
+                                maxPointsInside = pointsInside.length;
+                                bestConfiguration = {
+                                    angle,
+                                    shiftX,
+                                    shiftY,
+                                    points: pointsInside,
+                                };
+                            }
+                        });
+                    }
+                }
+      
+                addDebugLog(
+                    `Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Optimal configuration found: ShiftX ${bestConfiguration.shiftX.toFixed(2)}m, ShiftY ${bestConfiguration.shiftY.toFixed(2)}m, Rotation ${bestConfiguration.angle.toFixed(2)}° with ${maxPointsInside} points.`
+                );
+      
+                // Add the optimal points to the map
+                bestConfiguration.points.forEach((point) => {
+                    const [lng, lat] = point.geometry.coordinates;
+                    L.circleMarker([lat, lng], {
+                        radius: 2,
+                        color: "red",
+                    }).addTo(geothermalPointsLayer);
+                });
+      
+                addDebugLog(`Polygon ${polygonIndex + 1}.${subPolygonIndex + 1}: Final point count: ${bestConfiguration.points.length}`);
+            });
+        });
+      
+        updateResults();
+        addDebugLog("All polygons processed successfully.");
+      } catch (error) {
+        addDebugLog(`Unexpected error: ${error.message}`);
+      }
+      }
+
+
+
+//Funtion Meters to degrees
+        function metersToDegrees(meters, latitude = 0) {
+            var earthCircumference = 40075000; 
+            var latDegrees = meters / earthCircumference * 360;
+            var lngDegrees = meters / (earthCircumference * Math.cos(latitude * Math.PI / 180)) * 360;
+            return latitude === 0 ? latDegrees : lngDegrees;
+        }
+
+//Funktion Buffer alle Elemente
+      function bufferAll() {
+      addDebugLog("Starte Puffervorgang für alle Layer...");
+      bufferLayer.clearLayers(); // Vorherige Puffer löschen     
+      const params = getParameterValues(); // Abrufen der Parameterwerte     
+      bufferFeatures(buildingLayer, 'orange', params.gebäudeAbstand); // Gebäude puffern
+      bufferFeatures(treeLayer, 'green', params.bäumeAbstand);        // Bäume puffern    
+      bufferFeatures(restrictionsLayer, 'orange', params.restriktionAbstand);        // Restriktion puffern    
+      addDebugLog("Puffervorgang für alle Layer abgeschlossen.");
+      }
+ 
+//Funktion Buffer einzelne Elemente
+      function bufferFeatures(layerGroup, color, distance) {
+        addDebugLog("Starte Puffervorgang für LayerGroup...");      
+        layerGroup.eachLayer(function (layer) {
+            if (layer instanceof L.Polygon || layer instanceof L.CircleMarker) {
+                try {
+                    // GeoJSON erstellen und Puffern
+                    let geojsonFeature;
+                    if (layer instanceof L.Polygon) {
+                        let latlngs = layer.getLatLngs()[0];
+                        if (latlngs[0].lat !== latlngs[latlngs.length - 1].lat || latlngs[0].lng !== latlngs[latlngs.length - 1].lng) {
+                            latlngs.push(latlngs[0]); // Polygon schließen
+                        }
+                        geojsonFeature = turf.polygon([latlngs.map(ll => [ll.lng, ll.lat])]);
+                    } else if (layer instanceof L.CircleMarker) {
+                        const latlng = layer.getLatLng();
+                        geojsonFeature = turf.point([latlng.lng, latlng.lat]);
+                    }      
+                    const buffered = turf.buffer(geojsonFeature, distance, { units: 'meters' });
+                    if (buffered.geometry.type === "Polygon") {
+                        const bufferedLatLngs = buffered.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
+                        if (bufferedLatLngs[0][0] !== bufferedLatLngs[bufferedLatLngs.length - 1][0] ||
+                            bufferedLatLngs[0][1] !== bufferedLatLngs[bufferedLatLngs.length - 1][1]) {
+                            bufferedLatLngs.push(bufferedLatLngs[0]); // Polygon schließen
+                        }
+                        const bufferedPolygon = L.polygon(bufferedLatLngs, { color: color, weight: 2 });      
+                        // ID zuweisen und in feature.properties speichern
+                        const bufferId = `P${bufferIdCounter++}`;
+                        bufferedPolygon._id = bufferId;
+                        bufferedPolygon.feature = { properties: { id: bufferId } };      
+                        bufferedPolygon.addTo(bufferLayer);
+                    }
+                } catch (error) {
+                    addDebugLog("Fehler beim Puffern: " + error.message);
+                }
+            }
+        });      
+          addDebugLog("Puffervorgang für LayerGroup abgeschlossen.");
+      }
+
+//-------
+//Funktion reduzieren Area um die Buffer
+//-------
+      function adjustProbeArea() {
+      addDebugLog("Starte Anpassung der Sondenfläche für alle Nutzer-Polygone...");
+      const reader = new jsts.io.GeoJSONReader();
+      const writer = new jsts.io.GeoJSONWriter();
+      const results = [];
+      let totalArea = 0;
+      // Iteriere über alle Nutzer-Polygone in drawnItems
+      drawnItems.eachLayer(function (userPolygon) {
+      if (!(userPolygon instanceof L.Polygon)) {
+      addDebugLog("Überspringe nicht-Polygon-Layer.");
+      return;
+      }
+      // Nutzer-Polygon in JSTS umwandeln
+      const userGeoJSON = userPolygon.toGeoJSON();
+      const userJstsPolygon = reader.read(userGeoJSON.geometry);
+      let currentPolygon = userJstsPolygon;
+      addDebugLog("Bearbeite ein Nutzerpolygon...");
+      // Differenz mit jedem Puffer berechnen
+      bufferLayer.eachLayer(function (bufferLayer) {
+      const bufferId = bufferLayer.feature?.properties?.id || "Unbekannt";
+      try {
+      //addDebugLog(`Verarbeite Puffer mit ID: ${bufferId}`);
+      const bufferGeoJSON = bufferLayer.toGeoJSON();
+      const bufferJstsPolygon = reader.read(bufferGeoJSON.geometry);
+      if (currentPolygon.intersects(bufferJstsPolygon)) {
+      	addDebugLog(`Puffer mit ID ${bufferId} schneidet das Nutzerpolygon.`);
+      	currentPolygon = currentPolygon.difference(bufferJstsPolygon);
+      } else {
+      	//addDebugLog(`Puffer mit ID ${bufferId} hat keinen Schnitt mit dem Nutzerpolygon.`);
+      }
+      } catch (error) {
+      addDebugLog(`Fehler bei der Verarbeitung von Puffer ${bufferId}: ${error.message}`);
+      }
+      });
+      // Save resulting polygon if valid
+        if (currentPolygon && !currentPolygon.isEmpty()) {
+            const resultGeoJSON = writer.write(currentPolygon);
+            if (resultGeoJSON && resultGeoJSON.coordinates.length > 0) {
+                results.push(resultGeoJSON);
+                totalArea += turf.area(resultGeoJSON); // Calculate area 
+                // Add the resulting polygon to the adjusted polygon layer group
+                const adjustedPolygon = L.geoJSON(resultGeoJSON, {
+                    style: {
+                        color: 'blue',
+                        weight: 1,
+                        dashArray: '5, 5',
+                        fillOpacity: 0,
+                    },
+                });
+                adjustedPolygon.addTo(adjustedPolygonLayer);
+                addDebugLog("Resultierendes Polygon zur Karte hinzugefügt.");
+            } else {
+                addDebugLog("Das resultierende Polygon ist leer.");
+            }
+        } else {
+            addDebugLog("Keine gültige Sondenfläche nach Verarbeitung.");
+        }
+      });     
+      // Update the usable area in the result container
+      document.getElementById('nutzbareFlaeche').textContent = 
+      `Nutzbare Fläche [m²]: ${totalArea.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;      
+      addDebugLog(`Total usable area: ${totalArea.toFixed(2)} m².`);
+      addDebugLog("Adjustment of the probe area completed.");
+      addDebugLog("Anpassung der Sondenfläche für alle Nutzer-Polygone abgeschlossen.");
+      }
+
+
+//Funktion Debug on/off
+      function toggleDebugLog() {
+      const container = document.getElementById('debug-log-container');
+      const header = document.getElementById('debug-header');
+      
+      if (container.classList.contains('expanded')) {
+      container.classList.remove('expanded');
+      header.textContent = "Debug-Log anzeigen";
+      } else {
+      container.classList.add('expanded');
+      header.textContent = "Debug-Log ausblenden";
+      }
+      }
+
+///-------
+//Funktion Export als PDF
+///-------
+      function exportResultsToPDF() {
+      // Check if probes were generated
+      const sondenCount = geothermalPointsLayer.getLayers().length;
+      if (sondenCount === 0) {
+        showErrorDialog("Es wurden keine Sonden ermittelt. Bitte klicken Sie auf 'Erdwärmesonden aus Polygon ermitteln' und versuchen Sie es erneut.");
+        return;
+      } 
+      addDebugLog("PDF-Erstellung gestartet...");  
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ format: "a4" }); // A4 format
+      const titleBackgroundColor = "#003366"; // Dark blue title background
+      const titleTextColor = "#FFFFFF"; // White text for title
+      const sectionTitleColor = "#333333"; // Dark gray for section titles
+      const lineColor = "#CCCCCC"; // Light gray for lines
+      let currentY = 10; // Start Y position for content  
+      // Header section
+      pdf.setFillColor(titleBackgroundColor);
+      pdf.rect(0, currentY, 210, 15, "F");
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(16);
+      pdf.setTextColor(titleTextColor);
+      pdf.text("Geo-Check", 10, currentY + 10);
+      currentY += 20; 
+      // Step 1: Focus map on user polygons
+      let polygonBounds = new L.LatLngBounds();
+      drawnItems.eachLayer((layer) => {
+        if (layer instanceof L.Polygon) {
+            polygonBounds.extend(layer.getBounds());
+        }
+      });
+      if (polygonBounds.isValid()) {
+        const center = polygonBounds.getCenter();
+        <!-- map.panTo(center); -->
+      map.fitBounds(polygonBounds);
+        addDebugLog("Map centered on polygons.");
+      } else {
+        addDebugLog("No polygons found. Skipping map centering.");
+      }
+      // Step 2: Add map screenshot to PDF
+      screenshoter
+        .takeScreen("image")
+        .then((image) => {
+            const img = new Image();
+            img.src = image;
+            img.onload = () => {
+                const pdfWidth = 190;
+                let imgWidth = pdfWidth;
+                let imgHeight = (img.height / img.width) * imgWidth;
+                if (imgHeight > 100) {
+                    imgHeight = 100;
+                    imgWidth = (img.width / img.height) * imgHeight;
+                }
+                pdf.addImage(img, "PNG", 10, currentY, imgWidth, imgHeight);
+                currentY += imgHeight + 10; 
+                // Divider line
+                pdf.setDrawColor(lineColor);
+                pdf.line(10, currentY, 200, currentY);
+                currentY += 5;  
+                // Add parameters
+                pdf.setFont("helvetica", "bold");
+                pdf.setFontSize(10);
+                pdf.setTextColor(sectionTitleColor);
+                pdf.text("Berechnungsparameter:", 10, currentY);
+                currentY += 1;
+                pdf.setFont("helvetica", "normal");
+                pdf.setFontSize(10);
+                const params = [
+                    `Abstand zwischen Sonden: ${document.getElementById("sondenAbstand").value} m`,
+                    `Abstand zu Gebäuden: ${document.getElementById("gebäudeAbstand").value} m`,
+                    `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m`,
+                    `Abstand zu Restriktionsflächen: ${document.getElementById("restriktionAbstand").value} m`,
+                    `Sondentiefe: ${document.getElementById("sondenTiefe").value} m`,
+                    `Spez. Entzugsleistung: ${document.getElementById("spezEntzugsleistung").value} W/m`,
+                    `COP Wärmepumpe: ${document.getElementById("copWärmepumpe").value}`,
+                ];
+                params.forEach((param, index) => {
+                    pdf.text(param, 10, currentY + (index + 1) * 6);
+                });
+                currentY += params.length * 6 + 8;
+      
+                // Divider line
+                pdf.setDrawColor(lineColor);
+                pdf.line(10, currentY, 200, currentY);
+                currentY += 5;
+          // Ergebnisse hinzufügen
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(10);
+          pdf.text("Ergebnisse:", 10, currentY);
+          currentY += 7;
+          pdf.setFont("helvetica", "normal");
+          const results = [
+              document.getElementById("nutzbareFlaeche").textContent,
+              document.getElementById("sondenAnzahl").textContent,
+              document.getElementById("gesamteEntzugsleistung").textContent,
+              document.getElementById("heizleistung").textContent,
+              document.getElementById("wärmeleitfähigkeit").textContent,
+              document.getElementById("tiefenrestriktion").textContent
+          ];
+          // Ergebnisse zeilenweise hinzufügen
+          results.forEach((result, index) => {
+              pdf.text(result, 10, currentY + (index * 6));
+          });
+          currentY += results.length * 6;
+          // "Geothermisches Potenzial" mit Umbruch
+          const geothermalText = document.getElementById("geothermischesPotenzial").textContent;
+          const wrappedText = pdf.splitTextToSize(geothermalText, 180);
+          pdf.text(wrappedText, 10, currentY);
+          currentY += wrappedText.length * 6;
+                // Footer
+                const creationDate = new Date().toLocaleString();
+                pdf.setFont("helvetica", "italic");
+                pdf.setFontSize(8);
+                pdf.setTextColor("#666666");
+                pdf.text(`Erstellt am ${creationDate} (Geo-Check)`, 105, 290, { align: "center" });
+      
+                pdf.save("GeoCheck-Ergebnisse.pdf");
+                addDebugLog("PDF erfolgreich gespeichert.");
+            };
+        })
+        .catch((error) => {
+            addDebugLog("Fehler während der Screenshot-Erstellung: " + error.message);
+        });
+      }
+      document.getElementById("pdfButton").addEventListener("click", exportResultsToPDF);
+      
+
+      
+//Debug-Funktion IDs zeigen
+      function showFeatureIds() {
+      addDebugLog("Starte Anzeige der Feature-IDs...");   
+      // Entferne bestehende Textmarker
+      map.eachLayer(function (layer) {
+      if (layer.options && layer.options.type === 'textMarker') {
+      map.removeLayer(layer);
+      addDebugLog("Entferne vorhandene Textmarker.");
+      }
+      });
+      // Funktion, um den Mittelpunkt zu berechnen und die ID anzuzeigen
+      function drawTextMarker(featureLayer, id, offsetY = 0) {
+      let center;
+      if (featureLayer instanceof L.Polygon) {
+      addDebugLog("Berechne Mittelpunkt für Polygon.");
+      center = featureLayer.getBounds().getCenter();
+      } else if (featureLayer instanceof L.CircleMarker) {
+      addDebugLog("Berechne Mittelpunkt für CircleMarker.");
+      center = featureLayer.getLatLng();
+      } else {
+      addDebugLog("Unbekannter Feature-Typ. Überspringe.");
+      return;
+      }
+      if (center) {
+      addDebugLog(`Zeichne Textmarker für ID ${id} bei Position: ${JSON.stringify(center)} mit OffsetY: ${offsetY}.`);
+      L.marker([center.lat, center.lng], {
+      icon: L.divIcon({
+      	className: 'feature-id-label',
+      	html: `<div>${id}</div>`,
+      	iconSize: [50, 20],
+      	iconAnchor: [25, -offsetY] // Setze Offset nach unten
+      }),
+      type: 'textMarker' // Kennzeichne den Layer als Textmarker
+      }).addTo(map);
+      } else {
+      addDebugLog(`Fehler: Mittelpunkt konnte nicht berechnet werden für ID ${id}.`);
+      }
+      }
+      // IDs der Gebäude anzeigen
+      buildingLayer.eachLayer(function (layer) {
+      const id = layer.feature?.properties?.id;
+      if (id) {
+      addDebugLog(`Verarbeite Gebäude-ID: ${id}`);
+      drawTextMarker(layer, id); // Kein Offset für Gebäude
+      } else {
+      addDebugLog("Kein ID gefunden für Gebäude-Feature.");
+      }
+      });
+      // IDs der Bäume anzeigen
+      treeLayer.eachLayer(function (layer) {
+      const id = layer.feature?.properties?.id;
+      if (id) {
+      addDebugLog(`Verarbeite Baum-ID: ${id}`);
+      drawTextMarker(layer, id, 25); // Erhöhter Offset von 25 Pixeln nach unten
+      } else {
+      addDebugLog("Kein ID gefunden für Baum-Feature.");
+      }
+      });
+      // IDs der Puffer anzeigen
+      bufferLayer.eachLayer(function (layer) {
+      const id = layer.feature?.properties?.id;
+      if (id) {
+      //addDebugLog(`Verarbeite Puffer-ID: ${id}`);
+      drawTextMarker(layer, id, 50); // Erhöhter Offset von 50 Pixeln nach unten
+      } else {
+      addDebugLog("Kein ID gefunden für Puffer-Feature.");
+      }
+      });
+      addDebugLog("Anzeige der Feature-IDs abgeschlossen.");
+      }
+      
+
+
+//Funktion Karte und Ergebnisse wiederherstellen
+      function resetMap() {
+      addDebugLog("Reset der Karte gestartet..."); 
+      // Entferne alle Layer
+      if (geothermalPointsLayer) geothermalPointsLayer.clearLayers();
+      if (buildingLayer) buildingLayer.clearLayers();
+      if (treeLayer) treeLayer.clearLayers();
+      if (restrictionsLayer) restrictionsLayer.clearLayers();
+      if (bufferLayer) bufferLayer.clearLayers();
+      if (drawnItems) drawnItems.clearLayers();
+      // Entferne angepasste Sondenarea
+      map.eachLayer(function (layer) {
+        if (layer.feature && layer.feature.geometry) {
+            // Überprüfe, ob der Layer ein Polygon ist
+            if (
+                layer.feature.geometry.type === "Polygon" ||
+                layer.feature.geometry.type === "MultiPolygon"
+            ) {
+                map.removeLayer(layer);
+                addDebugLog("Sondenarea gelöscht.");
+            }
+        }
+      });
+      // Setze die Ergebnisse zurück
+      document.getElementById("sondenAnzahl").textContent = "Anzahl der Sonden: 0";
+      document.getElementById("gesamteEntzugsleistung").textContent = "Gesamte Entzugsleistung [kW]: 0,00";
+      document.getElementById("heizleistung").textContent = "Heizleistung [kW]: 0,00";
+      document.getElementById("nutzbareFlaeche").textContent = "Nutzbare Fläche [m²]: 0,00"; // Reset usable area
+      // Reset Geothermisches Potenzial
+      const resultElement = document.getElementById("geothermischesPotenzial");
+      resultElement.innerHTML = `<span style="color:black;">Geothermisches Potenzial:</span> -`;
+      addDebugLog("Karte und Ergebnisse wurden zurückgesetzt.");
+      }
+
+//Export-Funktion als GeoGjson
+   function exportGEOJSON() {
+      const mapName = 'map'; // Hier ist der Name Ihrer Karteninstanz
+      function layerGroupToGeoJSON(layerGroup) {
+        const features = [];
+        layerGroup.eachLayer(layer => {
+          if (layer.toGeoJSON) {
+            const feature = layer.toGeoJSON();
+            // Add depth property for geothermal points
+            if (layerGroup === geothermalPointsLayer) {
+              const sondentiefe = parseFloat(document.getElementById('sondenTiefe').value);
+              feature.properties = feature.properties || {};
+              feature.properties.depth = sondentiefe;
+            }
+            features.push(feature);
+          }
+        });
+        return {
+          type: 'FeatureCollection',
+          features: features
+        };
+      }
+      const drawnItemsData = layerGroupToGeoJSON(drawnItems);
+      const restrictionsData = layerGroupToGeoJSON(restrictionsLayer);
+      const geothermalPointsData = layerGroupToGeoJSON(geothermalPointsLayer);
+      const allLayersData = {
+        drawnItems: drawnItemsData,
+        restrictionsLayer: restrictionsData,
+        geothermalPointsLayer: geothermalPointsData,
+      };
+      const jsonData = JSON.stringify(allLayersData, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      const downloadLink = document.createElement('a');
+      downloadLink.href = URL.createObjectURL(blob);
+      
+      // Create date-based filename with number of boreholes
+      const now = new Date();
+      const year = now.getFullYear().toString().slice(-2);
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      const day = now.getDate().toString().padStart(2, '0');
+      const numberOfBoreholes = geothermalPointsLayer.getLayers().length;
+      const sondentiefe = document.getElementById('sondenTiefe').value;
+      const sondenabstand = document.getElementById('sondenAbstand').value;
+      const filename = `${year}${month}${day}_Geo-Check-${numberOfBoreholes}x${sondentiefe}_${sondenabstand}.geojson`;
+      
+      downloadLink.download = filename;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+    }
+
+//Listener - Wenn PArameter Änderung automatische Berechnung
+      // Event-Listener für relevante Felder hinzufügen
+      const relevantFields = ['spezEntzugsleistung', 'sondenTiefe', 'copWärmepumpe', 'wärmeleitfähigkeit'];
+      relevantFields.forEach(fieldId => {
+      const input = document.getElementById(fieldId);
+      input.addEventListener('input', () => {
+        // Ergebnisse neu berechnen und aktualisieren, aber ohne Farbe zu ändern
+        updateResultsWithoutColorReset();
+      });
+      });
+
+// Event-Listener für Distanz-Parameter - Rot bei Änderung
+      const distanceFields = ['sondenAbstand', 'gebäudeAbstand', 'bäumeAbstand', 'restriktionAbstand'];
+      distanceFields.forEach(fieldId => {
+        const input = document.getElementById(fieldId);
+        input.addEventListener('input', () => {
+          // Setze nur die Zahlen in den Ergebnis-Texts auf rot
+          const resultElements = [
+            'nutzbareFlaeche',
+            'sondenAnzahl',
+            'gesamteEntzugsleistung',
+            'heizleistung'
+          ];
+          resultElements.forEach(elementId => {
+            const element = document.getElementById(elementId);
+            if (element) {
+              // Extrahiere den Text und die Zahl
+              const text = element.textContent;
+              const parts = text.split(': ');
+              if (parts.length === 2) {
+                // Setze nur den Zahlenwert auf rot
+                element.innerHTML = `${parts[0]}: <span style="color: red">${parts[1]}</span>`;
+              }
+            }
+          });
+        });
+      });
+
+// Funktion zum Aktualisieren der Ergebnisse ohne Farbänderung
+      function updateResultsWithoutColorReset() {
+        const params = getParameterValues();
+        const anzahlSonden = geothermalPointsLayer.getLayers().length;
+        let reduktionsfaktor;
+        if (anzahlSonden <= 70) {
+          reduktionsfaktor = (159.863 - 12.547 * Math.log(100.761 * anzahlSonden - 141.675)) / 100;
+        } else {
+          reduktionsfaktor = 0.49;
+        }
+        const gesamteEntzugsleistung = anzahlSonden * params.sondenTiefe * params.spezEntzugsleistung * reduktionsfaktor / 1000;
+        const heizleistung = (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1);     
+        
+        function formatNumber(number) {
+          return number.toLocaleString('de-DE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          });
+        }
+        // Update results keeping existing color
+        const elements = {
+          'sondenAnzahl': anzahlSonden,
+          'gesamteEntzugsleistung': formatNumber(gesamteEntzugsleistung),
+          'heizleistung': formatNumber(heizleistung)
+        };
+        for (const [id, value] of Object.entries(elements)) {
+          const element = document.getElementById(id);
+          if (element) {
+            const currentColor = element.querySelector('span')?.style.color || 'black';
+            element.innerHTML = `${element.textContent.split(': ')[0]}: <span style="color: ${currentColor}">${value}</span>`;
+          }
+        }
+      }
+// Funktion zum Aktualisieren der Ergebnisse mit Farbänderung zu schwarz
+      function updateResults() {
+        const params = getParameterValues();
+        const anzahlSonden = geothermalPointsLayer.getLayers().length;
+        let reduktionsfaktor;
+        if (anzahlSonden <= 70) {
+          reduktionsfaktor = (159.863 - 12.547 * Math.log(100.761 * anzahlSonden - 141.675)) / 100 ;
+        } else {
+          reduktionsfaktor = 0.49;
+        }
+        const gesamteEntzugsleistung = anzahlSonden * params.sondenTiefe * params.spezEntzugsleistung * reduktionsfaktor / 1000;
+        const heizleistung = (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1);             
+        function formatNumber(number) {
+          return number.toLocaleString('de-DE', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+          });
+        }
+        // Update results with black color
+        document.getElementById('sondenAnzahl').innerHTML = `Anzahl der Sonden: <span style="color: black">${anzahlSonden}</span>`;
+        document.getElementById('gesamteEntzugsleistung').innerHTML = 
+          `Gesamte Entzugsleistung [kW]: <span style="color: black">${formatNumber(gesamteEntzugsleistung)}</span>`;
+        document.getElementById('heizleistung').innerHTML = 
+          `Heizleistung [kW]: <span style="color: black">${formatNumber(heizleistung)}</span>`;
+      }
+      
+      
+      
+    </script>
+    <div style="text-align: right; font-size: 0.6rem; margin-top: 20px; color: #666;">
+      Geo-Check, Version 1.3.3 (06.2025)
+    </div>
+  </body>
+</html>
