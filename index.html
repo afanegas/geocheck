@@ -1,3 +1,12 @@
+<!--
+	=======================================================
+	Projektname   : GEO-Check
+	Version       : v2.0.1
+	Erstellungsdatum : 15.02.2026
+	Autor	      : Alejandro Fanegas
+	Lizenz        : MIT-Lizenz
+	=======================================================
+	-->
 <html lang="de" class="antialiased">
 
 <head>
@@ -196,7 +205,7 @@
             </div>
             <div
                 class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
-                v2.0.0
+                v2.0.1
             </div>
         </header>
 
@@ -319,11 +328,13 @@
                 </div>
 
                 <div class="space-y-2 pt-2 mt-2 border-t border-zinc-200">
-                    <p id="geothermischesPotenzial" class="text-xs leading-relaxed text-zinc-500">
+                    <p id="geothermischesPotenzial" class="text-xs leading-relaxed text-zinc-500"
+                        title="Sie können die angezeigten spezifische Entzugsleistung und maximale Sondentiefe für eine neue Berechnungsiteration verwenden. Die Ergebnisse aktualisieren sich automatisch.">
                         <span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span>
                         -
                     </p>
-                    <p id="wärmeleitfähigkeit" class="text-xs leading-relaxed text-zinc-500">
+                    <p id="wärmeleitfähigkeit" class="text-xs leading-relaxed text-zinc-500"
+                        title="Sie können die angezeigte spezifische Wärmeleitfähigkeit für die Berechnung in Geo‑Check‑Companion verwenden.">
                         <span class="font-semibold text-zinc-700 block mb-0.5">Spez. Wärmeleitfähigkeit</span>
                         -
                     </p>
@@ -337,7 +348,7 @@
             <!-- Export -->
             <div id="export-container" class="pt-2">
                 <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Export</h2>
-                <div id="button-container" class="grid grid-cols-3 gap-2">
+                <div id="button-container" class="grid grid-cols-4 gap-2">
                     <button id="pdfButton"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group">
                         <iconify-icon icon="solar:printer-linear" width="24"
@@ -345,22 +356,32 @@
                         <span class="text-[10px] font-medium">PDF</span>
                     </button>
 
+                    <button id="importButton" onclick="triggerImport()"
+                        class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group"
+                        title="GeoJSON Import">
+                        <iconify-icon icon="solar:file-send-linear" width="24"
+                            class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
+                        <span class="text-[10px] font-medium">Import</span>
+                    </button>
+
                     <button id="exportGeoJSONButton" onclick="exportGEOJSON()"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group"
                         title="GeoJSON Export">
                         <iconify-icon icon="solar:file-download-linear" width="24"
                             class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
-                        <span class="text-[10px] font-medium">GeoJSON</span>
+                        <span class="text-[10px] font-medium">Export</span>
                     </button>
 
                     <button id="companionButton"
                         onclick="window.open('https://geocheckcompanion.streamlit.app/', '_blank')"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group"
-                        title="Companion App">
+                        title="Geo‑Check‑Companion starten">
                         <iconify-icon icon="solar:smart-home-angle-linear" width="24"
                             class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
                         <span class="text-[10px] font-medium">Companion</span>
                     </button>
+                    <input type="file" id="importInput" accept=".geojson,application/json" class="hidden"
+                        onchange="importGEOJSON(event)">
                 </div>
             </div>
 
@@ -454,8 +475,8 @@
         <p class="text-sm text-zinc-600">Mit dem Reset-Button (<iconify-icon icon="solar:restart-linear" inline></iconify-icon>) werden alle Zeichnungen und Flächen auf der Karte gelöscht. Die Eingabeparameter bleiben dabei unverändert erhalten.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">📤 Ergebnisse exportieren</h4>
-        <p class="text-sm text-zinc-600">Am Ende der Seite können Sie die Ergebnisse als PDF oder GeoJSON (für GIS-Software oder Geo-Check-Companion) herunterladen. Einen Screenshot der Karte laden Sie mit dem Button (<iconify-icon icon="solar:camera-linear" inline></iconify-icon>) herunter.</p>
+        <h4 class="font-bold text-zinc-900 flex items-center gap-2">📤 Ergebnisse importieren & exportieren</h4>
+        <p class="text-sm text-zinc-600">Am Ende der Seite können Sie die Ergebnisse als PDF oder GeoJSON (für GIS-Software oder Geo-Check-Companion) herunterladen. Zusätzlich können Sie GeoJSON‑Dateien importieren, die zuvor mit Geo‑Check erzeugt wurden, um Polygone wieder zu verwenden. Einen Screenshot der Karte laden Sie mit dem Button (<iconify-icon icon="solar:camera-linear" inline></iconify-icon>) herunter.</p>
     </div>
     <div class="space-y-1">
         <h4 class="font-bold text-zinc-900 flex items-center gap-2">📉 Hinweis zur Berechnung</h4>
@@ -1619,17 +1640,24 @@
         function generateGeothermalPoints() {
             try {
                 addDebugLog("Starting optimization of geothermal probe points...");
-                // Retrieve all adjusted polygons from the map
+                // Retrieve all adjusted polygons from the map - now restricted to adjustedPolygonLayer
                 let adjustedPolygons = [];
-                map.eachLayer(function (layer) {
-                    if (
-                        layer.feature &&
-                        layer.feature.geometry &&
-                        (layer.feature.geometry.type === "Polygon" || layer.feature.geometry.type === "MultiPolygon")
-                    ) {
-                        adjustedPolygons.push(layer.toGeoJSON());
-                    }
-                });
+
+                function findPolygons(group) {
+                    group.eachLayer(function (layer) {
+                        if (layer instanceof L.Polygon || layer instanceof L.MultiPolygon) {
+                            adjustedPolygons.push(layer.toGeoJSON());
+                        } else if (layer.eachLayer) {
+                            findPolygons(layer);
+                        } else if (layer.feature && layer.feature.geometry &&
+                            (layer.feature.geometry.type === "Polygon" || layer.feature.geometry.type === "MultiPolygon")) {
+                            adjustedPolygons.push(layer.toGeoJSON());
+                        }
+                    });
+                }
+
+                findPolygons(adjustedPolygonLayer);
+
                 if (adjustedPolygons.length === 0) {
                     addDebugLog("No adjusted polygons found. The process cannot continue.");
                     return;
@@ -1697,70 +1725,97 @@
 
                         // Create a larger grid
                         const bbox = turf.bbox(polygon);
-                        const [minX, minY, maxX, maxY] = bbox;
-                        const diagonalDistance = Math.sqrt(Math.pow(maxX - minX, 2) + Math.pow(maxY - minY, 2));
+                        const [minX_orig, minY_orig, maxX_orig, maxY_orig] = bbox;
+                        const diagonalDistance = Math.sqrt(Math.pow(maxX_orig - minX_orig, 2) + Math.pow(maxY_orig - minY_orig, 2));
                         const margin = diagonalDistance / 2;
-                        const expandedBbox = [minX - margin, minY - margin, maxX + margin, maxY + margin];
-                        const grid = turf.pointGrid(expandedBbox, sondenAbstand, { units: "meters" });
+                        const expandedBbox = [minX_orig - margin, minY_orig - margin, maxX_orig + margin, maxY_orig + margin];
 
-                        const initialPointsInside = grid.features.filter((point) =>
-                            turf.booleanPointInPolygon(point, polygon)
-                        );
+                        // --- GRID OPTIMIZATION (SQUARE VS STAGGERED) ---
+                        const [minX, minY, maxX, maxY] = expandedBbox;
+                        const dyHex = sondenAbstand * Math.sqrt(3) / 2;
+                        const steps = 12; // Shifting steps
+                        const stepSize = sondenAbstand / steps;
+                        const maxShiftSteps = Math.ceil((sondenAbstand / 2) / stepSize);
 
-                        if (initialPointsInside.length > 500) {
-                            // Add the initial points to the map
-                            initialPointsInside.forEach((point) => {
-                                const [lng, lat] = point.geometry.coordinates;
-                                L.circleMarker([lat, lng], {
-                                    radius: 2,
-                                    color: "#dc2626", // Red
-                                    fillColor: "#dc2626",
-                                    fillOpacity: 1
-                                }).addTo(geothermalPointsLayer);
-                            });
-                            return;
-                        }
-                        // Shift and test angles for the grid
-                        const stepSize = sondenAbstand / 12; // Step size is 1/12th of the spacing
-                        const maxShiftSteps = Math.ceil((sondenAbstand / 2) / stepSize); // Shift up to half the spacing
-                        let maxPointsInside = 0;
-                        let bestConfiguration = { angle: 0, shiftX: 0, shiftY: 0, points: [] };
+                        let bestGlobalConfig = { count: -1, type: 'none', points: [], angle: 0 };
 
-                        for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
-                            for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
-                                const shiftX = xShiftStep * stepSize;
-                                const shiftY = yShiftStep * stepSize;
+                        const gridTypes = ['Square', 'Hexagonal'];
 
-                                const shiftedGrid = turf.transformTranslate(
-                                    turf.transformTranslate(grid, shiftX, 90, { units: "meters" }),
-                                    shiftY, 0, { units: "meters" }
-                                );
+                        gridTypes.forEach(type => {
+                            let gridBase;
+                            if (type === 'Square') {
+                                gridBase = turf.pointGrid(expandedBbox, sondenAbstand, { units: "meters" });
+                            } else {
+                                // Specialized Staggered Grid Generation
+                                const hexFeatures = [];
+                                let rowStartPoint = turf.point([minX, minY]);
+                                let rowCount = 0;
+                                const height = turf.distance(turf.point([minX, minY]), turf.point([minX, maxY]), { units: 'meters' });
+                                const estimatedRows = Math.ceil(height / dyHex) + 2;
 
-                                angles.forEach((angle) => {
-                                    const rotatedGrid = turf.transformRotate(shiftedGrid, angle, { pivot: turf.centerOfMass(polygon) });
-                                    const pointsInside = rotatedGrid.features.filter((point) =>
-                                        turf.booleanPointInPolygon(point, polygon)
+                                for (let r = 0; r < estimatedRows; r++) {
+                                    const rowOffset = (rowCount % 2 === 0) ? 0 : (sondenAbstand / 2);
+                                    let currentPoint = rowStartPoint;
+                                    if (rowOffset > 0) currentPoint = turf.transformTranslate(currentPoint, rowOffset, 90, { units: 'meters' });
+
+                                    while (true) {
+                                        hexFeatures.push(currentPoint);
+                                        currentPoint = turf.transformTranslate(currentPoint, sondenAbstand, 90, { units: 'meters' });
+                                        if (currentPoint.geometry.coordinates[0] > maxX + 0.005) break;
+                                    }
+                                    rowStartPoint = turf.transformTranslate(rowStartPoint, dyHex, 0, { units: 'meters' });
+                                    rowCount++;
+                                    if (rowStartPoint.geometry.coordinates[1] > maxY + 0.005) break;
+                                }
+                                gridBase = turf.featureCollection(hexFeatures);
+                            }
+
+                            // Optimization Loop for this Grid Type
+                            let maxPointsForType = -1;
+                            let bestConfigForType = null;
+
+                            for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
+                                for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
+                                    const shiftX = xShiftStep * stepSize;
+                                    const shiftY = yShiftStep * stepSize;
+
+                                    const shiftedGrid = turf.transformTranslate(
+                                        turf.transformTranslate(gridBase, shiftX, 90, { units: "meters" }),
+                                        shiftY, 0, { units: "meters" }
                                     );
 
-                                    if (pointsInside.length > maxPointsInside) {
-                                        maxPointsInside = pointsInside.length;
-                                        bestConfiguration = {
-                                            angle,
-                                            shiftX,
-                                            shiftY,
-                                            points: pointsInside,
-                                        };
-                                    }
-                                });
+                                    angles.forEach((angle) => {
+                                        const rotatedGrid = turf.transformRotate(shiftedGrid, angle, { pivot: turf.centerOfMass(polygon) });
+                                        const pointsInside = rotatedGrid.features.filter((p) => turf.booleanPointInPolygon(p, polygon));
+
+                                        if (pointsInside.length > maxPointsForType) {
+                                            maxPointsForType = pointsInside.length;
+                                            bestConfigForType = { type, count: pointsInside.length, points: pointsInside, angle };
+                                        }
+                                    });
+                                }
                             }
-                        }
+
+                            addDebugLog(`${type} grid optimization finished: Max ${maxPointsForType} probes.`);
+                            logTimestamp(`${type} optimization complete`);
+
+                            // Determine Global Winner
+                            if (maxPointsForType > bestGlobalConfig.count) {
+                                bestGlobalConfig = bestConfigForType;
+                            } else if (maxPointsForType === bestGlobalConfig.count && type === 'Square') {
+                                // Default to Square on ties
+                                bestGlobalConfig = bestConfigForType;
+                            }
+                        });
+
+                        addDebugLog(`Winner: ${bestGlobalConfig.type} (${bestGlobalConfig.count} probes)`);
 
                         // Add the optimal points to the map
-                        bestConfiguration.points.forEach((point) => {
+                        bestGlobalConfig.points.forEach((point) => {
                             const [lng, lat] = point.geometry.coordinates;
                             L.circleMarker([lat, lng], {
                                 radius: 2.5,
-                                color: "#ef4444", // Red 500
+                                color: "#ef4444",
                                 fillColor: "#ef4444",
                                 fillOpacity: 1,
                                 weight: 0
@@ -1868,7 +1923,7 @@
                                 fillOpacity: 0.1,
                             },
                         });
-                        adjustedPolygon.addTo(adjustedPolygonLayer);
+                        adjustedPolygon.eachLayer(l => l.addTo(adjustedPolygonLayer));
                     }
                 }
             });
@@ -2134,6 +2189,96 @@
             document.body.appendChild(downloadLink);
             downloadLink.click();
             document.body.removeChild(downloadLink);
+        }
+
+        // Import-Funktionen
+        function triggerImport() {
+            document.getElementById('importInput').click();
+        }
+
+        function importGEOJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    addDebugLog("GeoJSON importiert. Verarbeite Daten...");
+
+                    // Clear existing layers
+                    drawnItems.clearLayers();
+                    restrictionsLayer.clearLayers();
+                    geothermalPointsLayer.clearLayers();
+                    adjustedPolygonLayer.clearLayers();
+                    bufferLayer.clearLayers();
+
+                    // Process drawnItems (Polygons)
+                    if (data.drawnItems && data.drawnItems.features) {
+                        L.geoJSON(data.drawnItems, {
+                            onEachFeature: (feature, layer) => {
+                                layer.addTo(drawnItems);
+                            }
+                        });
+                        addDebugLog(`${data.drawnItems.features.length} Polygone importiert.`);
+                    }
+
+                    // Process restrictionsLayer
+                    if (data.restrictionsLayer && data.restrictionsLayer.features) {
+                        L.geoJSON(data.restrictionsLayer, {
+                            onEachFeature: (feature, layer) => {
+                                layer.addTo(restrictionsLayer);
+                            }
+                        });
+                        addDebugLog(`${data.restrictionsLayer.features.length} Restriktionsflächen importiert.`);
+                    }
+
+                    // Process geothermalPointsLayer
+                    if (data.geothermalPointsLayer && data.geothermalPointsLayer.features) {
+                        L.geoJSON(data.geothermalPointsLayer, {
+                            pointToLayer: (feature, latlng) => {
+                                return L.circleMarker(latlng, {
+                                    radius: 2.5,
+                                    color: "#ef4444",
+                                    fillColor: "#ef4444",
+                                    fillOpacity: 1,
+                                    weight: 0
+                                });
+                            },
+                            onEachFeature: (feature, layer) => {
+                                layer.addTo(geothermalPointsLayer);
+                            }
+                        });
+                        addDebugLog(`${data.geothermalPointsLayer.features.length} Sonden importiert.`);
+
+                        // If depth is present in the first probe, update the input field
+                        if (data.geothermalPointsLayer.features.length > 0) {
+                            const firstProbe = data.geothermalPointsLayer.features[0];
+                            if (firstProbe.properties && firstProbe.properties.depth) {
+                                document.getElementById('sondenTiefe').value = firstProbe.properties.depth;
+                                addDebugLog(`Sondentiefe auf ${firstProbe.properties.depth}m aktualisiert.`);
+                            }
+                        }
+                    }
+
+                    // Update results display
+                    updateResults();
+
+                    // Center map on imported polygon
+                    let bounds = drawnItems.getBounds();
+                    if (bounds.isValid()) {
+                        map.fitBounds(bounds);
+                    }
+
+                    addDebugLog("Import erfolgreich abgeschlossen.");
+                } catch (error) {
+                    addDebugLog(`Fehler beim Importieren: ${error.message}`);
+                    showErrorDialog(`Fehler beim Importieren des GeoJSON: ${error.message}`);
+                }
+            };
+            reader.readAsText(file);
+            // Reset input so the same file can be imported again
+            event.target.value = '';
         }
 
         //Listener - Wenn PArameter Änderung automatische Berechnung
