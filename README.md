@@ -7,9 +7,13 @@ Geo-Check is a web-based tool designed for the initial assessment and visualizat
 
 ## Functions
 i. **Borehole Field Calculation**: Draw polygons on the map to define potential areas for geothermal probes.
+
 ii. **Restriction Management**: Automatically accounts for existing buildings and trees, with the option to manually define additional restriction zones.
+
 iii. **Advanced Map Layers**: Switch between standard maps, satellite imagery, and specific WMS layers including geothermal potential, thermal conductivity, and land registry boundaries.
+
 iv. **Data Integration & Export**: Import/Export GeoJSON data for GIS compatibility and generate PDF reports of the calculations.
+
 v. **Companion Integration**: Seamlessly transition to Geo-Check-Companion for more detailed site calculations.
 
 ## Methodology & Simplifications
