@@ -1,8 +1,8 @@
 <!--
 	=======================================================
 	Projektname   : GEO-Check
-	Version       : v2.0.2
-	Erstellungsdatum : 19.04.2026
+	Version       : v2.0.3
+	Erstellungsdatum : 16.05.2026
 	Autor	      : Alejandro Fanegas
 	Lizenz        : MIT-Lizenz
 	=======================================================
@@ -206,7 +206,7 @@
             </div>
             <div
                 class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
-                v2.0.2
+                v2.0.3
             </div>
         </header>
 
@@ -517,6 +517,14 @@
                     [bbox.getNorthEast().lat, bbox.getSouthWest().lng],
                     [bbox.getSouthWest().lat, bbox.getSouthWest().lng]
                 ]).addTo(map);
+
+                // Klick-Event hinzufügen, um das Polygon zu löschen
+                poly.on('click', function () {
+                    map.removeLayer(poly);
+                    if (searchResultPolygon === poly) {
+                        searchResultPolygon = null;
+                    }
+                });
                 // Remove the previous search polygon if it exists
                 if (searchResultPolygon) {
                     map.removeLayer(searchResultPolygon);
@@ -1739,7 +1747,8 @@
 
                         let bestGlobalConfig = { count: -1, type: 'none', points: [], angle: 0 };
 
-                        const gridTypes = ['Square', 'Hexagonal'];
+                        // const gridTypes = ['Square', 'Hexagonal']; // Square functionality kept for future use. Do not erase.
+                        const gridTypes = ['Hexagonal'];
 
                         gridTypes.forEach(type => {
                             let gridBase;
@@ -2101,6 +2110,11 @@
 
         //Funktion Karte und Ergebnisse wiederherstellen
         function resetMap() {
+            // Entferne Such-Polygon, falls vorhanden
+            if (searchResultPolygon) {
+                map.removeLayer(searchResultPolygon);
+                searchResultPolygon = null;
+            }
             // Entferne alle Layer
             if (geothermalPointsLayer) geothermalPointsLayer.clearLayers();
             if (buildingLayer) buildingLayer.clearLayers();
