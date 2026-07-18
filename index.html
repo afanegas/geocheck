@@ -388,16 +388,16 @@
             <!-- Debug Trigger -->
             <div id="debug-header" onclick="toggleDebugLog()"
                 class="text-[10px] text-zinc-400 text-center cursor-pointer hover:text-zinc-600 transition-colors mt-4">
-                Debug-Log anzeigen
+                Debug-Log ausblenden
             </div>
             <div id="debug-header2" onclick="toggleDebug()"
                 class="text-[10px] text-zinc-400 text-center cursor-pointer hover:text-zinc-600 transition-colors mt-2">
                 Debug-Funktionen anzeigen
             </div>
 
-            <!-- Hidden Debug Area -->
+            <!-- Debug Area (visible by default while diagnosing performance) -->
             <div id="debug-log-container"
-                class="hidden text-xs font-mono bg-zinc-900 text-green-400 p-3 rounded max-h-40 overflow-auto">
+                class="text-xs font-mono bg-zinc-900 text-green-400 p-3 rounded max-h-40 overflow-auto">
                 <div id="debug-log"></div>
             </div>
 
