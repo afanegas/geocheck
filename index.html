@@ -828,10 +828,6 @@
         let buildingIdCounter = 1; // Zähler für Gebäude-IDs
         let treeIdCounter = 1;     // Zähler für Baum-IDs
         let bufferIdCounter = 1;   // Zähler für Puffer-IDs
-        let buildingsLoadFailed = false; // Wird true, wenn das Laden der Gebäude fehlschlägt
-        let treesLoadFailed = false;     // Wird true, wenn das Laden der Bäume fehlschlägt
-        let buildingsLoadError = "";     // Die tatsächliche Fehlermeldung
-        let treesLoadError = "";         // Die tatsächliche Fehlermeldung
         // Screenshoter
         const screenshoter = L.simpleMapScreenshoter({
             hidden: false, // Sichtbar auf der Karte
@@ -1131,10 +1127,6 @@
             }
             geothermalPointsLayer.clearLayers();
             adjustedPolygonLayer.clearLayers();
-            buildingsLoadFailed = false;
-            treesLoadFailed = false;
-            buildingsLoadError = "";
-            treesLoadError = "";
 
             // Reset Displays
             document.querySelector("#sondenAnzahl .font-mono").textContent = "0";
@@ -1173,56 +1165,31 @@
             }
 
             // Step-by-step execution using async/await
-            // Note: sleeps are now just short yields so the debug log / loading indicator
-            // can repaint between steps; they no longer add multi-second artificial delay.
-            await sleep(20);
+            await sleep(200);
             addDebugLog("Lade Gebäude...");
             await loadBuildings();
 
-            await sleep(20);
+            await sleep(200);
             addDebugLog("Lade Bäume...");
             await loadTrees();
             logTimestamp("Gebäude/Bäume geladen");
 
-            // Give the browser a real paint frame here so the just-loaded buildings
-            // and trees are actually visible on the map before the next steps
-            // (buffering, area adjustment, grid search) block the main thread with
-            // synchronous work. Without this pause the layers are added to the map
-            // but never get a chance to render before being overwritten.
-            await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 400)));
-
+            await sleep(1000);
             addDebugLog("Puffern...");
             bufferAll();
             logTimestamp("gepuffert");
 
-            await sleep(20);
+            await sleep(1000);
             addDebugLog("Sondenfläche anpassen...");
             adjustProbeArea();
             logTimestamp("area adjusted");
 
-            if (buildingsLoadFailed || treesLoadFailed) {
-                const failedItems = [
-                    buildingsLoadFailed ? "Gebäude" : null,
-                    treesLoadFailed ? "Bäume" : null
-                ].filter(Boolean).join(" und ");
-                const errorDetails = [
-                    buildingsLoadFailed ? `Gebäude-Fehler: ${buildingsLoadError}` : null,
-                    treesLoadFailed ? `Bäume-Fehler: ${treesLoadError}` : null
-                ].filter(Boolean).join(" | ");
-                showErrorDialog(
-                    `Achtung: ${failedItems} konnten nicht geladen werden. ` +
-                    `Die Sondenpunkte werden ohne diese Ausschlussflächen berechnet und können daher zu nah an ` +
-                    `Gebäuden oder Bäumen liegen. Bitte versuchen Sie den Prozess erneut.<br><br><span class="text-xs text-zinc-500">Details: ${errorDetails}</span>`
-                );
-                addDebugLog(`Warnung angezeigt: ${failedItems} nicht geladen. Details: ${errorDetails}`);
-            }
-
-            await sleep(20);
+            await sleep(1000);
             addDebugLog("Sondenpunkte generieren...");
             generateGeothermalPoints();
             logTimestamp("sonden generated");
 
-            await sleep(20);
+            await sleep(1000);
             addDebugLog("Bereinige Elemente...");
             clearAllExceptSonden();
 
@@ -1530,50 +1497,7 @@
             addDebugLog("Puffer von der Karte entfernt.");
         }
 
-        // List of Overpass API endpoints to try, in order. If the primary instance is
-        // down, rate-limited, or not sending CORS headers, we automatically fall back
-        // to the next mirror instead of failing outright.
-        const OVERPASS_ENDPOINTS = [
-            'https://overpass-api.de/api/interpreter',
-            'https://overpass.private.coffee/api/interpreter',
-            'https://lz4.overpass-api.de/api/interpreter'
-        ];
-
-        // Helper function for robust fetching with retry across multiple endpoints
-        async function fetchOverpass(query, options = {}, retriesPerEndpoint = 2, backoff = 1000) {
-            let lastError;
-            for (const endpoint of OVERPASS_ENDPOINTS) {
-                for (let i = 0; i < retriesPerEndpoint; i++) {
-                    try {
-                        const response = await fetch(endpoint, options);
-                        if (!response.ok) {
-                            if (response.status === 504 || response.status === 429) {
-                                addDebugLog(`API-Server beschäftigt (${response.status}) bei ${endpoint}. Versuch ${i + 1}/${retriesPerEndpoint}...`);
-                            } else {
-                                throw new Error(`HTTP Error: ${response.status} (${endpoint})`);
-                            }
-                        } else {
-                            const contentType = response.headers.get("content-type");
-                            if (options.method === 'POST' && (!contentType || !contentType.includes("application/json"))) {
-                                const text = await response.text();
-                                if (text.includes("error") || text.includes("html")) {
-                                    throw new Error("API returned non-JSON content (likely an error page)");
-                                }
-                            }
-                            return response;
-                        }
-                    } catch (err) {
-                        lastError = err;
-                        addDebugLog(`Fehler beim Laden von ${endpoint} (${err.message}).`);
-                    }
-                    await new Promise(resolve => setTimeout(resolve, backoff));
-                }
-                addDebugLog(`Wechsle zu nächstem Overpass-Server nach Fehlversuchen bei ${endpoint}...`);
-            }
-            throw lastError || new Error("Alle Overpass-Server nicht erreichbar.");
-        }
-
-        // Helper function for robust fetching with retry (kept for any other callers)
+        // Helper function for robust fetching with retry
         async function fetchWithRetry(url, options = {}, retries = 3, backoff = 1000) {
             for (let i = 0; i < retries; i++) {
                 try {
@@ -1622,7 +1546,7 @@
         out skel qt;
       `;
             try {
-                const response = await fetchOverpass(query, {
+                const response = await fetchWithRetry('https://overpass-api.de/api/interpreter', {
                     method: 'POST',
                     body: 'data=' + encodeURIComponent(query)
                 });
@@ -1645,15 +1569,10 @@
                         }
                     });
                     addDebugLog("Gebäude erfolgreich geladen.");
-                    if (data.elements.filter(el => el.type === 'way').length === 0) {
-                        addDebugLog("Warnung: Keine Gebäude im Suchbereich gefunden (oder Antwort leer).");
-                    }
                 }
             } catch (error) {
                 addDebugLog("Fehler beim Laden der Gebäude: " + error.message);
                 console.error("loadBuildings error:", error);
-                buildingsLoadFailed = true;
-                buildingsLoadError = error.message;
             }
         }
 
@@ -1676,7 +1595,7 @@
         out body;
       `;
             try {
-                const response = await fetchOverpass(query, {
+                const response = await fetchWithRetry('https://overpass-api.de/api/interpreter', {
                     method: 'POST',
                     body: 'data=' + encodeURIComponent(query)
                 });
@@ -1697,8 +1616,6 @@
             } catch (error) {
                 addDebugLog("Fehler beim Laden der Bäume: " + error.message);
                 console.error("loadTrees error:", error);
-                treesLoadFailed = true;
-                treesLoadError = error.message;
             }
         }
 
@@ -1833,18 +1750,6 @@
                         // const gridTypes = ['Square', 'Hexagonal']; // Square functionality kept for future use. Do not erase.
                         const gridTypes = ['Hexagonal'];
 
-                        const pivot = turf.centerOfMass(polygon);
-                        const polyBbox = turf.bbox(polygon);
-                        // Generous padding (in degrees) covering the max shift distance, so the
-                        // pre-filter below can never discard a point that would later land inside
-                        // the polygon once shifted.
-                        const maxShiftMeters = maxShiftSteps * stepSize;
-                        const shiftPadDeg = (maxShiftMeters / 111320) * 2;
-                        const paddedBbox = [
-                            polyBbox[0] - shiftPadDeg, polyBbox[1] - shiftPadDeg,
-                            polyBbox[2] + shiftPadDeg, polyBbox[3] + shiftPadDeg
-                        ];
-
                         gridTypes.forEach(type => {
                             let gridBase;
                             if (type === 'Square') {
@@ -1874,54 +1779,31 @@
                                 gridBase = turf.featureCollection(hexFeatures);
                             }
 
-                            // Optimization Loop for this Grid Type.
-                            //
-                            // The original algorithm rotated the (large) grid on every one of the
-                            // ~(maxShiftSteps+1)^2 shift combinations, for each candidate angle —
-                            // that's ~100 full-grid rotations. Rotation and shifting commute in
-                            // the sense that exploring "rotate then shift-by-all-offsets" covers
-                            // the exact same set of absolute grid positions as "shift-by-all-offsets
-                            // then rotate", so the best (maximum points-inside) configuration found
-                            // is identical either way — only the specific shift step that achieves
-                            // it differs, which is irrelevant since we only keep the winning point
-                            // set. We therefore rotate the grid once per angle up front, then only
-                            // translate (cheap) inside the shift loop.
-                            //
-                            // We also pre-filter the rotated grid down to a padded bounding box
-                            // around the polygon before the shift loop, since points far outside
-                            // that box can never fall inside the polygon after any of the small
-                            // (sub-spacing) shifts explored here — this avoids running the costly
-                            // exact point-in-polygon test against the whole oversized grid.
+                            // Optimization Loop for this Grid Type
                             let maxPointsForType = -1;
                             let bestConfigForType = null;
 
-                            angles.forEach((angle) => {
-                                const rotatedGridOnce = turf.transformRotate(gridBase, angle, { pivot });
-                                const candidatePoints = rotatedGridOnce.features.filter((p) => {
-                                    const [x, y] = p.geometry.coordinates;
-                                    return x >= paddedBbox[0] && x <= paddedBbox[2] && y >= paddedBbox[1] && y <= paddedBbox[3];
-                                });
-                                const candidateFC = turf.featureCollection(candidatePoints);
+                            for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
+                                for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
+                                    const shiftX = xShiftStep * stepSize;
+                                    const shiftY = yShiftStep * stepSize;
 
-                                for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
-                                    for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
-                                        const shiftX = xShiftStep * stepSize;
-                                        const shiftY = yShiftStep * stepSize;
+                                    const shiftedGrid = turf.transformTranslate(
+                                        turf.transformTranslate(gridBase, shiftX, 90, { units: "meters" }),
+                                        shiftY, 0, { units: "meters" }
+                                    );
 
-                                        const shiftedGrid = turf.transformTranslate(
-                                            turf.transformTranslate(candidateFC, shiftX, 90, { units: "meters" }),
-                                            shiftY, 0, { units: "meters" }
-                                        );
-
-                                        const pointsInside = shiftedGrid.features.filter((p) => turf.booleanPointInPolygon(p, polygon));
+                                    angles.forEach((angle) => {
+                                        const rotatedGrid = turf.transformRotate(shiftedGrid, angle, { pivot: turf.centerOfMass(polygon) });
+                                        const pointsInside = rotatedGrid.features.filter((p) => turf.booleanPointInPolygon(p, polygon));
 
                                         if (pointsInside.length > maxPointsForType) {
                                             maxPointsForType = pointsInside.length;
                                             bestConfigForType = { type, count: pointsInside.length, points: pointsInside, angle };
                                         }
-                                    }
+                                    });
                                 }
-                            });
+                            }
 
                             addDebugLog(`${type} grid optimization finished: Max ${maxPointsForType} probes.`);
                             logTimestamp(`${type} optimization complete`);
