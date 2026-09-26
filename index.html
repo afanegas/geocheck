@@ -1306,7 +1306,19 @@
                     const p3 = fetchWithRetry(wfsQueryUrlTyp)
                         .then(r => r.json())
                         .then(data => {
-                            if (data.features && data.features.length > 0) { rupeltonTyp = data.features[0].properties.typ || ""; }
+                            if (!data.features || data.features.length === 0) return;
+                            // The WFS BBOX filter also returns zones whose extent merely overlaps the query box,
+                            // so keep only the zone that actually contains the Sonde.
+                            const sondePoint = turf.point([lng, lat]);
+                            const hit = data.features.find((feature) => {
+                                if (!feature.geometry) return false;
+                                let f = feature;
+                                // Guard against lat/lon axis order in the response (Berlin: lng ≈ 13, lat ≈ 52)
+                                if (turf.coordAll(f)[0][0] > 40) f = turf.flip(f);
+                                return turf.booleanPointInPolygon(sondePoint, f);
+                            });
+                            if (hit) { rupeltonTyp = hit.properties.typ || ""; }
+                            else { addDebugLog(`Rupelton Typ: ${data.features.length} Zone(n) im Suchbereich, Sonde liegt in keiner.`); }
                         })
                         .catch(e => addDebugLog("Fehler Rupelton Typ: " + e.message));
 
