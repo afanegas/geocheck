@@ -464,7 +464,7 @@
     </div>
     <div class="space-y-1">
         <h4 class="font-bold text-zinc-900 flex items-center gap-2">🌳 Restriktionsflächen</h4>
-        <p class="text-sm text-zinc-600">Gebäude und Bäume werden automatisch berücksichtigt. Zusätzlich können Sie eigene Restriktionsflächen definieren: Wählen Sie im Dropdown-Menü den Eintrag „Restriktionsfläche zeichnen" aus und nutzen Sie anschließend das Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>), um die Fläche einzuzeichnen.</p>
+        <p class="text-sm text-zinc-600">Gebäude und Bäume werden automatisch berücksichtigt. Zusätzlich können Sie eigene Restriktionsflächen definieren: Wählen Sie im Dropdown-Menü den Eintrag „Restriktionsfläche zeichnen" aus und nutzen Sie anschließend das Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>), um die Fläche einzuzeichnen. Bäume, die nicht in der Basiskarte enthalten sind, können Sie über den Eintrag „Baum zeichnen" als grüne Punkte ergänzen; für sie gilt der eingestellte Baumabstand.</p>
     </div>
     <div class="space-y-1">
         <h4 class="font-bold text-zinc-900 flex items-center gap-2">🗺️ Weitere Kartenansichten auswählen</h4>
@@ -821,6 +821,7 @@
         var treeLayer = L.layerGroup().addTo(map);
         var drawnItems = new L.FeatureGroup().addTo(map);
         var restrictionsLayer = L.layerGroup().addTo(map);
+        var customTreesLayer = L.layerGroup().addTo(map); // Manuell gezeichnete Bäume (nicht in der Basiskarte)
         var bufferLayer = L.layerGroup().addTo(map); // Neuer Layer für Puffer
         var geothermalPointsLayer = L.layerGroup().addTo(map);
         var adjustedPolygonLayer = L.layerGroup().addTo(map);
@@ -852,6 +853,9 @@
         restrictionsLayer.eachLayer(function (layer) {
             editableFeatures.addLayer(layer);
         });
+        customTreesLayer.eachLayer(function (layer) {
+            editableFeatures.addLayer(layer);
+        });
 
         // Create a custom control for selecting the active layer
         var LayerSelectControl = L.Control.extend({
@@ -874,14 +878,21 @@
                 optionRestrictions.innerHTML = 'Restriktionsfläche zeichnen';
                 optionRestrictions.value = 'restrictionsLayer';
 
+                var optionTrees = L.DomUtil.create('option', '', select);
+                optionTrees.innerHTML = 'Baum zeichnen';
+                optionTrees.value = 'customTreesLayer';
+
                 // Add event listener
                 L.DomEvent.on(select, 'change', function (e) {
-                    if (e.target.value === 'drawnItems') {
-                        activeLayer = drawnItems;
-                        updateDrawOptions(false);
-                    } else {
+                    if (e.target.value === 'restrictionsLayer') {
                         activeLayer = restrictionsLayer;
-                        updateDrawOptions(true);
+                        updateDrawOptions('restriction');
+                    } else if (e.target.value === 'customTreesLayer') {
+                        activeLayer = customTreesLayer;
+                        updateDrawOptions('tree');
+                    } else {
+                        activeLayer = drawnItems;
+                        updateDrawOptions('sondenfeld');
                     }
                 });
 
@@ -892,7 +903,12 @@
         });
 
         // Function to update draw options based on selected layer
-        function updateDrawOptions(isRestriction) {
+        const treeStyle = { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.8, radius: 4, weight: 1 };
+
+        // Function to update draw options based on selected layer ('sondenfeld', 'restriction' or 'tree')
+        function updateDrawOptions(mode) {
+            var isRestriction = mode === 'restriction';
+            var isTree = mode === 'tree';
             // Remove existing draw control
             if (drawControl) {
                 map.removeControl(drawControl);
@@ -902,7 +918,7 @@
             var drawOptions = {
                 draw: {
                     polyline: false,
-                    polygon: {
+                    polygon: isTree ? false : {
                         shapeOptions: {
                             color: isRestriction ? '#f97316' : '#18181b', // Orange or Black
                             fillOpacity: 0.2
@@ -910,7 +926,7 @@
                     },
                     circle: false,
                     marker: false,
-                    circlemarker: false,
+                    circlemarker: isTree ? treeStyle : false,
                     rectangle: false
                 },
                 edit: {
@@ -930,6 +946,7 @@
         function applyDrawIcons() {
             const iconMap = {
                 'leaflet-draw-draw-polygon': 'solar:pen-new-square-linear',
+                'leaflet-draw-draw-circlemarker': 'mdi:tree-outline',
                 'leaflet-draw-edit-edit': 'solar:pen-2-linear',
                 'leaflet-draw-edit-remove': 'solar:trash-bin-trash-linear'
             };
@@ -950,14 +967,16 @@
 
         // Initial setup of draw control
         var drawControl;
-        updateDrawOptions(false);
+        updateDrawOptions('sondenfeld');
 
         // Handle the draw:created event
         map.on('draw:created', function (e) {
             var layer = e.layer;
 
-            // If we're adding to the restrictions layer, ensure the color is orange
-            if (activeLayer === restrictionsLayer) {
+            // Manually drawn trees are shown as green points
+            if (activeLayer === customTreesLayer) {
+                layer.setStyle(treeStyle);
+            } else if (activeLayer === restrictionsLayer) {
                 layer.setStyle({
                     color: '#f97316',
                     fillColor: '#f97316',
@@ -985,6 +1004,7 @@
             layers.eachLayer(function (layer) {
                 drawnItems.removeLayer(layer);
                 restrictionsLayer.removeLayer(layer);
+                customTreesLayer.removeLayer(layer);
                 editableFeatures.removeLayer(layer);
             });
         });
@@ -1859,6 +1879,7 @@
             const params = getParameterValues(); // Abrufen der Parameterwerte     
             bufferFeatures(buildingLayer, '#fb923c', params.gebäudeAbstand); // Gebäude puffern (Orange)
             bufferFeatures(treeLayer, '#4ade80', params.bäumeAbstand);        // Bäume puffern (Green)   
+            bufferFeatures(customTreesLayer, '#4ade80', params.bäumeAbstand); // Manuell gezeichnete Bäume puffern
             bufferFeatures(restrictionsLayer, '#fb923c', params.restriktionAbstand);        // Restriktion puffern    
             addDebugLog("Puffervorgang für alle Layer abgeschlossen.");
         }
@@ -2132,6 +2153,8 @@
             if (buildingLayer) buildingLayer.clearLayers();
             if (treeLayer) treeLayer.clearLayers();
             if (restrictionsLayer) restrictionsLayer.clearLayers();
+            if (customTreesLayer) customTreesLayer.clearLayers();
+            if (editableFeatures) editableFeatures.clearLayers();
             if (bufferLayer) bufferLayer.clearLayers();
             if (drawnItems) drawnItems.clearLayers();
             // Entferne angepasste Sondenarea
@@ -2190,10 +2213,12 @@
             }
             const drawnItemsData = layerGroupToGeoJSON(drawnItems);
             const restrictionsData = layerGroupToGeoJSON(restrictionsLayer);
+            const customTreesData = layerGroupToGeoJSON(customTreesLayer);
             const geothermalPointsData = layerGroupToGeoJSON(geothermalPointsLayer);
             const allLayersData = {
                 drawnItems: drawnItemsData,
                 restrictionsLayer: restrictionsData,
+                customTreesLayer: customTreesData,
                 geothermalPointsLayer: geothermalPointsData,
             };
             const jsonData = JSON.stringify(allLayersData, null, 2);
@@ -2235,6 +2260,8 @@
                     // Clear existing layers
                     drawnItems.clearLayers();
                     restrictionsLayer.clearLayers();
+                    customTreesLayer.clearLayers();
+                    editableFeatures.clearLayers();
                     geothermalPointsLayer.clearLayers();
                     adjustedPolygonLayer.clearLayers();
                     bufferLayer.clearLayers();
@@ -2257,6 +2284,18 @@
                             }
                         });
                         addDebugLog(`${data.restrictionsLayer.features.length} Restriktionsflächen importiert.`);
+                    }
+
+                    // Process customTreesLayer (manuell gezeichnete Bäume)
+                    if (data.customTreesLayer && data.customTreesLayer.features) {
+                        L.geoJSON(data.customTreesLayer, {
+                            pointToLayer: (feature, latlng) => L.circleMarker(latlng, treeStyle),
+                            onEachFeature: (feature, layer) => {
+                                layer.addTo(customTreesLayer);
+                                editableFeatures.addLayer(layer);
+                            }
+                        });
+                        addDebugLog(`${data.customTreesLayer.features.length} manuell gezeichnete Bäume importiert.`);
                     }
 
                     // Process geothermalPointsLayer
