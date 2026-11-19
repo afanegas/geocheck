@@ -267,6 +267,12 @@
                         <input type="number" id="bäumeAbstand" value="3" min="0" step="1"
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
+                    <label class="flex items-center gap-2 -mt-1 text-xs text-zinc-500 cursor-pointer"
+                        title="Bäume mit Kronendaten: Abstand = Kronenradius. Alle anderen Bäume: Baumabstand.">
+                        <input type="checkbox" id="kronenNutzen" class="accent-zinc-800">
+                        <span>Kronengröße nutzen (wenn vorhanden)</span>
+                        <span id="kronenInfo"></span>
+                    </label>
 
                     <div class="flex items-center justify-between group">
                         <label for="restriktionAbstand" class="text-sm text-zinc-600 font-medium">Abstand zu
@@ -541,6 +547,7 @@
 - Bäume auf Privatgrundstücken, die das Baumkataster nicht enthält, werden aus OpenStreetMap ergänzt. Bäume, die in beiden Quellen stehen, werden nur einmal gezählt.
 - Die Berechnung ist deutlich schneller. Sondenanzahl und -positionen bleiben gleich.
 - Die Sondentiefe steht standardmäßig auf „Auto“: die maximal mögliche Tiefe am Standort (Oberkante Rupelton, ohne Sicherheitsabstand; 400 m ohne Begrenzung). Die verwendete Tiefe wird angezeigt und lässt sich jederzeit überschreiben („Manuell“). Außerhalb Berlins ist Auto nicht verfügbar; dann gelten 100 m. PDF- und PNG-Export nennen, ob die Tiefe automatisch oder manuell gesetzt wurde.
+- Neuer Schalter „Kronengröße nutzen (wenn vorhanden)“: Bäume mit Kronendaten erhalten den Kronenradius als Abstand, alle anderen den Baumabstand.
 
 ## Version 3.3.0 (14.11.2026)
 
@@ -1567,6 +1574,16 @@
         }
         // TIEFE_AUTO_END
 
+        // KRONE_BEGIN
+        // Baumabstand: Mit eingeschaltetem Schalter gilt für Bäume mit Kronendaten der
+        // Kronenradius (kronedurch ist der Durchmesser), für alle anderen der Baumabstand.
+        // DOM-frei, damit tests/test_geocheck_app_krone.py den Block mit Node ausführt.
+        function baumAbstand(kronedurch, kronenNutzen, standardAbstand) {
+            if (kronenNutzen && typeof kronedurch === "number" && kronedurch > 0) return kronedurch / 2;
+            return standardAbstand;
+        }
+        // KRONE_END
+
         // Zustand der Sondentiefe: Modus 'auto' (Standard) oder 'manuell'. tiefeAuto ist die
         // maximal mögliche Tiefe am Standort: undefined = noch nicht ermittelt, null = nicht
         // verfügbar, sonst die Tiefe in m.
@@ -2289,6 +2306,7 @@
                 sondenAbstand: parseFloat(sondenAbstand),
                 gebäudeAbstand: parseFloat(gebäudeAbstand),
                 bäumeAbstand: parseFloat(bäumeAbstand),
+                kronenNutzen: document.getElementById('kronenNutzen').checked,
                 restriktionAbstand: parseFloat(restriktionAbstand),
                 sondenTiefe: parseFloat(sondenTiefe),
                 lambdaBoden: parseFloat(lambdaBoden),
@@ -2782,17 +2800,27 @@
             bufferLayer.clearLayers(); // Vorherige Puffer löschen     
             const params = getParameterValues(); // Abrufen der Parameterwerte     
             bufferFeatures(buildingLayer, '#fb923c', params.gebäudeAbstand); // Gebäude puffern (Orange)
-            bufferFeatures(treeLayer, '#4ade80', params.bäumeAbstand);        // Bäume puffern (Green)   
+            const kronedurchVon = layer => layer.feature && layer.feature.properties && layer.feature.properties.kronedurch;
+            const baumDistanz = layer => baumAbstand(kronedurchVon(layer), params.kronenNutzen, params.bäumeAbstand);
+            bufferFeatures(treeLayer, '#4ade80', baumDistanz);        // Bäume puffern (Green)   
             bufferFeatures(customTreesLayer, '#4ade80', params.bäumeAbstand); // Manuell gezeichnete Bäume puffern
             bufferFeatures(restrictionsLayer, '#fb923c', params.restriktionAbstand);        // Restriktion puffern    
+            const kronenInfo = document.getElementById('kronenInfo');
+            if (params.kronenNutzen) {
+                let alle = 0, mitKrone = 0;
+                treeLayer.eachLayer(l => { alle++; if (kronedurchVon(l) > 0) mitKrone++; });
+                kronenInfo.textContent = `(${mitKrone} von ${alle} Bäumen mit Kronendaten)`;
+            } else kronenInfo.textContent = '';
             addDebugLog("Puffervorgang für alle Layer abgeschlossen.");
         }
 
         //Funktion Buffer einzelne Elemente
-        function bufferFeatures(layerGroup, color, distance) {
+        // distance: Zahl oder Funktion (layer) => Abstand in m.
+        function bufferFeatures(layerGroup, color, distanceOrFn) {
             layerGroup.eachLayer(function (layer) {
                 if (layer instanceof L.Polygon || layer instanceof L.CircleMarker) {
                     try {
+                        const distance = typeof distanceOrFn === 'function' ? distanceOrFn(layer) : distanceOrFn;
                         // GeoJSON erstellen und Puffern
                         let geojsonFeature;
                         if (layer instanceof L.Polygon) {
@@ -3003,7 +3031,7 @@
                         const params = [
                             `Abstand zwischen Sonden: ${document.getElementById("sondenAbstand").value} m`,
                             `Abstand zu Gebäuden: ${document.getElementById("gebäudeAbstand").value} m`,
-                            `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m`,
+                            `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m` + (document.getElementById("kronenNutzen").checked ? ' (mit Kronenradius, wenn vorhanden)' : ''),
                             `Abstand zu Restriktionsflächen: ${document.getElementById("restriktionAbstand").value} m`,
                             `Sondentiefe: ${document.getElementById("sondenTiefe").value} m (${tiefeHerkunft()})`,
                             `Wärmeleitfähigkeit: ${document.getElementById("lambdaBoden").value} W/(m·K)`,
@@ -3269,7 +3297,7 @@
                 ['Auslegungszeitraum', document.getElementById('auslegungszeitraum').selectedOptions[0].text],
                 ['Sondenabstand', exportNumber('sondenAbstand') + ' m'],
                 ['Abstand Gebäude', exportNumber('gebäudeAbstand') + ' m'],
-                ['Abstand Bäume', exportNumber('bäumeAbstand') + ' m'],
+                ['Abstand Bäume', exportNumber('bäumeAbstand') + ' m' + (document.getElementById('kronenNutzen').checked ? ' (Kronenradius)' : '')],
             ];
             const eingabeHinweisBox = document.getElementById('eingabeHinweis');
             const warnTexts = eingabeHinweisBox.classList.contains('hidden') ? []
@@ -3811,10 +3839,10 @@
         });
 
         // Event-Listener für Distanz-Parameter - Rot bei Änderung
-        const distanceFields = ['sondenAbstand', 'gebäudeAbstand', 'bäumeAbstand', 'restriktionAbstand'];
+        const distanceFields = ['sondenAbstand', 'gebäudeAbstand', 'bäumeAbstand', 'restriktionAbstand', 'kronenNutzen'];
         distanceFields.forEach(fieldId => {
             const input = document.getElementById(fieldId);
-            input.addEventListener('input', () => {
+            input.addEventListener(fieldId === 'kronenNutzen' ? 'change' : 'input', () => {
                 // Setze nur die Zahlen in den Ergebnis-Texts auf rot
                 const resultElements = [
                     'nutzbareFlaeche',
