@@ -1,7 +1,7 @@
 <!--
 	=======================================================
 	Projektname   : Geo-Check light
-	Version       : v3.3.0
+	Version       : v3.4.0
 	Erstellungsdatum : 26.09.2026
 	Autor	      : Alejandro Fanegas
 	Lizenz        : MIT-Lizenz
@@ -206,7 +206,7 @@
             </div>
             <div
                 class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
-                v3.3.0
+                v3.4.0
                 <button type="button" onclick="showChangelog()"
                     class="ml-2 underline hover:text-zinc-700 transition-colors uppercase">Changelog</button>
             </div>
@@ -523,6 +523,14 @@
     <!-- CHANGELOG_BEGIN (Kopie von backend/data/docs/changelog_light.md, vom Test geprüft) -->
     <script type="text/markdown" id="changelog-md">
 # Changelog Geo-Check light
+
+## Version 3.4.0 (19.11.2026)
+
+- Gebäude und Bäume werden in Berlin aus dem Geoportal Berlin geladen (ALKIS-Gebäude, Baumkataster) statt aus OpenStreetMap: in unter einer Sekunde statt bis zu einer Minute. Außerhalb Berlins wie bisher aus OpenStreetMap.
+- Innenhöfe von Gebäuden gelten als freie Fläche; dort können Sonden stehen, mit dem Gebäudeabstand zum Hofrand.
+- Tiefgaragen und andere unterirdische Gebäude werden jetzt als Ausschlussfläche berücksichtigt.
+- Bäume auf Privatgrundstücken, die das Baumkataster nicht enthält, werden aus OpenStreetMap ergänzt. Bäume, die in beiden Quellen stehen, werden nur einmal gezählt.
+- Die Berechnung ist deutlich schneller. Sondenanzahl und -positionen bleiben gleich.
 
 ## Version 3.3.0 (14.11.2026)
 
