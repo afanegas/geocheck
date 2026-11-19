@@ -1465,6 +1465,146 @@
         }
         // GEOHAND_END
 
+        // BERLIN_WFS_BEGIN
+        // Gebäude und Bäume aus den Diensten des Geoportals Berlin (gdi.berlin.de):
+        // ALKIS-Gebäude und Baumkataster (Straßen- und Anlagenbäume). Deutlich
+        // schneller und bei Bäumen vollständiger als OSM/Overpass; außerhalb
+        // Berlins liefern die Dienste nichts, dann lädt die App aus OSM.
+        // DOM-frei, damit tests/test_geocheck_app_berlin_wfs.py den Block mit Node
+        // prüfen kann.
+
+        // Grobe Umgrenzung Berlins [Süd, West, Nord, Ost]; nur ein Vorfilter, damit
+        // außerhalb gar nicht erst gefragt wird. Entscheidend ist, ob der Dienst
+        // etwas liefert.
+        const BERLIN_BBOX = [52.33, 13.08, 52.68, 13.77];
+
+        function bboxIntersectsBerlin([south, west, north, east]) {
+            const [bs, bw, bn, be] = BERLIN_BBOX;
+            return south <= bn && north >= bs && west <= be && east >= bw;
+        }
+
+        // bbox = [Süd, West, Nord, Ost] in Grad (WGS84).
+        function berlinWfsUrls(bbox) {
+            const [south, west, north, east] = bbox;
+            const url = (service, typeName, extra) =>
+                `https://gdi.berlin.de/services/wfs/${service}?service=WFS&version=2.0.0&request=GetFeature` +
+                `&typeNames=${typeName}&outputFormat=application/json&srsName=EPSG:4326${extra}`;
+            const bboxParam = `&bbox=${south},${west},${north},${east},urn:ogc:def:crs:EPSG::4326`;
+            // Nur ganze Gebäude (AX_Gebaeude), keine Bauteile (Durchfahrten,
+            // Loggien, Keller, Geschossteile). Mit CQL_FILTER ignoriert GeoServer
+            // den bbox-Parameter, daher steht der Ausschnitt im Filter; dort in
+            // der Reihenfolge x,y = Länge,Breite.
+            const cql = `bezeich='AX_Gebaeude' AND BBOX(geom,${west},${south},${east},${north},'EPSG:4326')`;
+            return {
+                buildings: url('alkis_gebaeude', 'alkis_gebaeude:gebaeude',
+                    '&propertyName=geom&CQL_FILTER=' + encodeURIComponent(cql)),
+                streetTrees: url('baumbestand', 'baumbestand:strassenbaeume', '&propertyName=geom,kronedurch' + bboxParam),
+                parkTrees: url('baumbestand', 'baumbestand:anlagenbaeume', '&propertyName=geom,kronedurch' + bboxParam),
+            };
+        }
+
+        // -> { buildings: [[outer, hole, ...], ...], trees: [{ latlng: [lat, lon], kronedurch }] }
+        // mit Ringen als [[lat, lon], ...]. Jedes Gebäude behält seine Innenringe
+        // (Innenhöfe), damit dort Sonden möglich bleiben; L.polygon nimmt die
+        // Ringe in dieser Form. Ein MultiPolygon wird in seine Flächen zerlegt.
+        function parseBerlinWfs(buildingsFc, ...treeFcs) {
+            const rings = polygon => polygon.map(r => r.map(c => [c[1], c[0]]));
+            const buildings = [];
+            for (const f of (buildingsFc && buildingsFc.features) || []) {
+                const g = f.geometry;
+                if (!g) continue;
+                if (g.type === 'Polygon') buildings.push(rings(g.coordinates));
+                else if (g.type === 'MultiPolygon') g.coordinates.forEach(p => buildings.push(rings(p)));
+            }
+            const trees = [];
+            for (const fc of treeFcs) {
+                for (const f of (fc && fc.features) || []) {
+                    const g = f.geometry;
+                    if (!g || g.type !== 'Point') continue;
+                    const k = f.properties && f.properties.kronedurch;
+                    trees.push({ latlng: [g.coordinates[1], g.coordinates[0]],
+                                 kronedurch: typeof k === 'number' && k > 0 ? k : null });
+                }
+            }
+            return { buildings, trees };
+        }
+        // BERLIN_WFS_END
+
+        // OSM_TREES_BEGIN
+        // Bäume auf Privatgrund fehlen im Berliner Baumkataster. Sie kommen aus einem
+        // OSM-Auszug, den scripts/build_osm_trees.py als Kacheln neben die Seite legt
+        // (index.json + t_<iy>_<ix>.json). Ein OSM-Baum, der höchstens
+        // OSM_TREE_MATCH_RADIUS_M von einem Katasterbaum entfernt steht, ist derselbe
+        // Baum und entfällt; der Katasterbaum (aktuell, mit Kronendurchmesser) gilt.
+        // DOM-frei, damit tests/test_geocheck_app_osm_trees.py den Block mit Node
+        // prüfen kann.
+        const OSM_TREES_BASE_URL = 'data/osm_baeume/';
+        const OSM_TREE_MATCH_RADIUS_M = 3;
+
+        // Muss tile_key() in scripts/build_osm_trees.py entsprechen.
+        function osmTreeTileKey(lat, lon, index) {
+            return `${Math.floor(lat / index.tile_deg_lat)}_${Math.floor(lon / index.tile_deg_lon)}`;
+        }
+
+        // Schlüssel der vorhandenen Kacheln, die die bbox [Süd, West, Nord, Ost] berühren.
+        function osmTreeTileKeys(bbox, index) {
+            const [south, west, north, east] = bbox;
+            const have = new Set(index.tiles);
+            const keys = [];
+            for (let iy = Math.floor(south / index.tile_deg_lat); iy <= Math.floor(north / index.tile_deg_lat); iy++) {
+                for (let ix = Math.floor(west / index.tile_deg_lon); ix <= Math.floor(east / index.tile_deg_lon); ix++) {
+                    const key = `${iy}_${ix}`;
+                    if (have.has(key)) keys.push(key);
+                }
+            }
+            return keys;
+        }
+
+        // Kachelinhalte -> Bäume [lat, lon] innerhalb der bbox.
+        function osmTreesInBbox(tiles, bbox) {
+            const [south, west, north, east] = bbox;
+            const trees = [];
+            for (const tile of tiles) {
+                for (const p of (tile && tile.trees) || []) {
+                    if (p[0] >= south && p[0] <= north && p[1] >= west && p[1] <= east) trees.push(p);
+                }
+            }
+            return trees;
+        }
+
+        // Abgleich: OSM-Bäume ohne Katasterbaum im Umkreis von radiusM.
+        // registerLatLngs, osmLatLngs: [[lat, lon], ...]. -> { added: [[lat, lon]], duplicates }
+        function mergeOsmTrees(registerLatLngs, osmLatLngs, radiusM = OSM_TREE_MATCH_RADIUS_M) {
+            if (osmLatLngs.length === 0) return { added: [], duplicates: 0 };
+            const lat0 = osmLatLngs[0][0] * Math.PI / 180;
+            const ky = 111320, kx = 111320 * Math.cos(lat0);
+            // Raster mit Zellgröße radiusM: Nachbarn liegen in der eigenen oder einer der 8 Nachbarzellen.
+            const cell = (lat, lon) => [Math.floor(lat * ky / radiusM), Math.floor(lon * kx / radiusM)];
+            const grid = new Map();
+            for (const p of registerLatLngs) {
+                const [cy, cx] = cell(p[0], p[1]);
+                const k = cy + '_' + cx;
+                if (!grid.has(k)) grid.set(k, []);
+                grid.get(k).push(p);
+            }
+            const added = [];
+            let duplicates = 0;
+            for (const o of osmLatLngs) {
+                const [cy, cx] = cell(o[0], o[1]);
+                let near = false;
+                for (let dy = -1; dy <= 1 && !near; dy++) {
+                    for (let dx = -1; dx <= 1 && !near; dx++) {
+                        for (const p of grid.get((cy + dy) + '_' + (cx + dx)) || []) {
+                            if (Math.hypot((o[0] - p[0]) * ky, (o[1] - p[1]) * kx) <= radiusM) { near = true; break; }
+                        }
+                    }
+                }
+                if (near) duplicates++; else added.push(o);
+            }
+            return { added, duplicates };
+        }
+        // OSM_TREES_END
+
         // Zeigt die Hinweise zu Eingaben außerhalb des Gültigkeitsbereichs unter den Ergebnissen.
         // spezEntzug: berechnete spezifische Entzugsleistung [W/m] für die Kühlprüfung.
         function zeigeEingabeHinweise(params, anzahlSonden, spezEntzug) {
@@ -1630,41 +1770,47 @@
                 addDebugLog("Karte auf Nutzer-Polygone zentriert.");
             }
 
-            // Step-by-step execution using async/await
-            await sleep(200);
-            addDebugLog("Lade Gebäude...");
-            await loadBuildings();
+            // The Rupelton downloads are large (several MB, 4-7 s) and depend only on
+            // the drawn area, so they start now and run while the boreholes are
+            // computed; checkPotenzial picks the part it needs afterwards.
+            const rupelton = prefetchRupelton([polygonBounds.getSouth(), polygonBounds.getWest(),
+                polygonBounds.getNorth(), polygonBounds.getEast()]);
 
-            await sleep(200);
-            addDebugLog("Lade Bäume...");
-            await loadTrees();
+            // Short pauses between the synchronous steps only let the browser draw the
+            // map in between; they used to be 1 s each.
+            const PAUSE_MS = 50;
+
+            // Step-by-step execution using async/await
+            addDebugLog("Lade Gebäude und Bäume...");
+            await loadBuildingsAndTrees();
             logTimestamp("Gebäude/Bäume geladen");
 
-            await sleep(1000);
+            await sleep(PAUSE_MS);
             addDebugLog("Puffern...");
             bufferAll();
             logTimestamp("gepuffert");
 
-            await sleep(1000);
+            await sleep(PAUSE_MS);
             addDebugLog("Sondenfläche anpassen...");
             adjustProbeArea();
             logTimestamp("area adjusted");
 
-            await sleep(1000);
+            await sleep(PAUSE_MS);
             addDebugLog("Sondenpunkte generieren...");
             generateGeothermalPoints();
             logTimestamp("sonden generated");
 
-            await sleep(1000);
+            await sleep(PAUSE_MS);
             addDebugLog("Bereinige Elemente...");
             clearAllExceptSonden();
 
             addDebugLog("Führe Service-Abfragen (WFS/WMS) aus...");
             // We run both concurrently and wait for them to finish
             await Promise.all([
-                checkPotenzial(),
+                checkPotenzial(rupelton),
                 checkThermalConductivity()
             ]);
+            logTimestamp("Service-Abfragen fertig");
 
             addDebugLog("Vollständiger Prozess abgeschlossen.");
             stopProcessTimer();
@@ -1699,8 +1845,45 @@
 
         const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+        const RUPELTON_WFS = "https://gdi.berlin.de/services/wfs/geologie_rupelton";
+        // Search margins around the borehole, in degrees, as the queries always used.
+        const RUPELTON_LINES_MARGIN = 0.01;
+        const RUPELTON_ZONES_MARGIN = 0.0001;
+
+        // Starts both Rupelton WFS downloads for the bbox [south, west, north, east]
+        // widened by the search margins. Each result resolves to { data } or { error },
+        // never rejects.
+        function prefetchRupelton([south, west, north, east]) {
+            const get = (typeName, m) => fetchWithRetry(`${RUPELTON_WFS}?service=WFS&version=2.0.0&request=GetFeature` +
+                `&typeNames=${typeName}&outputFormat=application/json&srsName=EPSG:4326` +
+                `&bbox=${south - m},${west - m},${north + m},${east + m},urn:ogc:def:crs:EPSG::4326`)
+                .then(r => r.json())
+                .then(data => ({ data }), error => ({ error }));
+            return {
+                lines: get('geologie_rupelton:a_geologie_rupelton_li', RUPELTON_LINES_MARGIN),
+                zones: get('geologie_rupelton:b_geologie_rupelton_fl', RUPELTON_ZONES_MARGIN),
+            };
+        }
+
+        // The features the WFS would have returned for a box of +-m degrees around
+        // (lat, lng): GeoServer's BBOX filter keeps every feature whose envelope
+        // touches the box (checked against the service), so filtering the larger
+        // download by envelope gives the same set, in the same order.
+        function rupeltonFeaturesNear(data, lat, lng, m) {
+            const features = (data.features || []).filter((feature) => {
+                if (!feature.geometry) return false;
+                let f = feature;
+                if (turf.coordAll(f)[0][0] > 40) f = turf.flip(f); // lat/lon axis order guard, see below
+                const [x0, y0, x1, y1] = turf.bbox(f);
+                return x0 <= lng + m && x1 >= lng - m && y0 <= lat + m && y1 >= lat - m;
+            });
+            return { ...data, features };
+        }
+
         //Funktion zum lesen des Potenzials in Geoportal
-        function checkPotenzial() {
+        // rupelton: result of prefetchRupelton() for the drawn area; without it the
+        // data is fetched here for the borehole alone (as before the prefetch).
+        function checkPotenzial(rupelton) {
             return new Promise((resolve, reject) => {
                 try {
                     addDebugLog("Starte Überprüfung des geothermischen Potenzials...");
@@ -1735,13 +1918,16 @@
                     }
                     const { lat, lng } = closestSonde.getLatLng();
 
-                    // 1. WFS Query for Isoline (Depth)
-                    const wfsUrlGeologie = "https://gdi.berlin.de/services/wfs/geologie_rupelton";
-                    const wfsQueryUrlHolstein = `${wfsUrlGeologie}?service=WFS&version=2.0.0&request=GetFeature&typeNames=geologie_rupelton:a_geologie_rupelton_li&outputFormat=application/json&srsName=EPSG:4326&bbox=${lat - 0.01},${lng - 0.01},${lat + 0.01},${lng + 0.01},urn:ogc:def:crs:EPSG::4326`;
+                    if (!rupelton) rupelton = prefetchRupelton([lat, lng, lat, lng]);
+                    const near = (result, m) => {
+                        if (result.error) throw result.error;
+                        return rupeltonFeaturesNear(result.data, lat, lng, m);
+                    };
 
+                    // 1. WFS Query for Isoline (Depth)
                     let rupeltonDepth = "Keine Daten";
-                    const p1 = fetchWithRetry(wfsQueryUrlHolstein)
-                        .then(response => response.json())
+                    const p1 = rupelton.lines
+                        .then(result => near(result, RUPELTON_LINES_MARGIN))
                         .then(data => {
                             const sondePoint = turf.point([lng, lat]);
                             if (data.features && data.features.length > 0) {
@@ -1768,10 +1954,9 @@
                         .catch(error => { addDebugLog(`Fehler Rupelton Isoline: ${error.message}`); });
 
                     // 2. WFS Query for Polygon ('Typ' / Auflage)
-                    const wfsQueryUrlTyp = `${wfsUrlGeologie}?service=WFS&version=2.0.0&request=GetFeature&typeNames=geologie_rupelton:b_geologie_rupelton_fl&outputFormat=application/json&srsName=EPSG:4326&bbox=${lat - 0.0001},${lng - 0.0001},${lat + 0.0001},${lng + 0.0001},urn:ogc:def:crs:EPSG::4326`;
                     let rupeltonTyp = "";
-                    const p3 = fetchWithRetry(wfsQueryUrlTyp)
-                        .then(r => r.json())
+                    const p3 = rupelton.zones
+                        .then(result => near(result, RUPELTON_ZONES_MARGIN))
                         .then(data => {
                             if (!data.features || data.features.length === 0) return;
                             // The WFS BBOX filter also returns zones whose extent merely overlaps the query box,
@@ -2058,6 +2243,106 @@
             }
         }
 
+        // Quelle der zuletzt geladenen Gebäude/Bäume: 'berlin' oder 'osm' (für die Quellenangabe im Export).
+        let buildingsTreesSource = null;
+        // Anzahl der aus dem OSM-Auszug ergänzten Bäume (für die Quellenangabe im Export).
+        let osmTreesAdded = 0;
+
+        // index.json des OSM-Baum-Auszugs; einmal pro Seitenaufruf geladen.
+        let osmTreesIndexPromise = null;
+
+        // OSM-Bäume in der bbox aus dem Auszug (siehe OSM_TREES-Block).
+        // -> { trees: [[lat, lon]], stand }; wirft, wenn der Auszug fehlt oder unlesbar ist.
+        async function loadOsmTreeExtract(bbox) {
+            if (!osmTreesIndexPromise) {
+                osmTreesIndexPromise = fetch(OSM_TREES_BASE_URL + 'index.json').then(async r => {
+                    if (!r.ok) throw new Error(`index.json: HTTP ${r.status}`);
+                    const index = await r.json();
+                    if (index.format !== 1) throw new Error(`index.json: unbekanntes Format ${index.format}`);
+                    return index;
+                });
+                osmTreesIndexPromise.catch(() => { osmTreesIndexPromise = null; }); // beim nächsten Mal erneut versuchen
+            }
+            const index = await osmTreesIndexPromise;
+            const tiles = await Promise.all(osmTreeTileKeys(bbox, index).map(key =>
+                fetch(`${OSM_TREES_BASE_URL}t_${key}.json`).then(r => {
+                    if (!r.ok) throw new Error(`t_${key}.json: HTTP ${r.status}`);
+                    return r.json();
+                })));
+            return { trees: osmTreesInBbox(tiles, bbox), stand: index.stand };
+        }
+
+        // Lädt Gebäude und Bäume: in Berlin aus dem Geoportal (siehe BERLIN_WFS-Block),
+        // sonst oder wenn dort nichts kommt aus OSM (loadBuildings/loadTrees).
+        async function loadBuildingsAndTrees() {
+            const bbox = getUserPolygonsBoundingBox(50); // 50-meter margin, wie bei OSM
+            if (bbox && bboxIntersectsBerlin(bbox)) {
+                // Läuft parallel zum Geoportal; ein Fehler kostet nur die Privatbäume.
+                const osmTreesPromise = loadOsmTreeExtract(bbox).catch(error => ({ error }));
+                try {
+                    const t0 = performance.now();
+                    const urls = berlinWfsUrls(bbox);
+                    const [b, s, p] = await Promise.all([urls.buildings, urls.streetTrees, urls.parkTrees].map(
+                        url => fetchWithRetry(url).then(r => r.json())));
+                    const result = parseBerlinWfs(b, s, p);
+                    addDebugLog(`Geoportal Berlin: ${result.buildings.length} Gebäude, ${result.trees.length} Bäume ` +
+                        `in ${Math.round(performance.now() - t0)} ms.`);
+                    if (result.buildings.length > 0 || result.trees.length > 0) {
+                        buildingLayer.clearLayers();
+                        treeLayer.clearLayers();
+                        result.buildings.forEach(latlngs => {
+                            const polygon = L.polygon(latlngs, { color: '#3b82f6', weight: 1.5 }); // Blue
+                            polygon._id = `G${buildingIdCounter++}`;
+                            polygon.feature = { properties: { id: polygon._id } };
+                            polygon.on('click', handleFeatureClick);
+                            polygon.addTo(buildingLayer);
+                        });
+                        result.trees.forEach(tree => {
+                            const marker = L.circleMarker(tree.latlng, { color: '#22c55e', radius: 4, weight: 1 });
+                            marker._id = `T${treeIdCounter++}`;
+                            marker.feature = { properties: { id: marker._id, kronedurch: tree.kronedurch } };
+                            marker.on('click', handleFeatureClick);
+                            marker.addTo(treeLayer);
+                        });
+                        buildingsTreesSource = 'berlin';
+                        await addOsmTrees(osmTreesPromise, result.trees.map(t => t.latlng));
+                        return;
+                    }
+                    addDebugLog("Geoportal Berlin liefert hier nichts, lade aus OpenStreetMap.");
+                } catch (error) {
+                    addDebugLog("Geoportal Berlin nicht erreichbar (" + error.message + "), lade aus OpenStreetMap.");
+                    console.error("loadBuildingsAndTrees (Berlin) error:", error);
+                }
+            }
+            await loadBuildings();
+            await sleep(200);
+            await loadTrees();
+            buildingsTreesSource = 'osm';
+            osmTreesAdded = 0;
+        }
+
+        // Ergänzt die Bäume aus dem OSM-Auszug, die nicht schon im Kataster stehen.
+        async function addOsmTrees(osmTreesPromise, registerLatLngs) {
+            osmTreesAdded = 0;
+            const osm = await osmTreesPromise;
+            if (osm.error) {
+                addDebugLog("OSM-Baum-Auszug nicht verfügbar (" + osm.error.message + "), nur Bäume aus dem Kataster.");
+                console.error("loadOsmTreeExtract error:", osm.error);
+                return;
+            }
+            const { added, duplicates } = mergeOsmTrees(registerLatLngs, osm.trees);
+            added.forEach(latlng => {
+                const marker = L.circleMarker(latlng, { color: '#22c55e', radius: 4, weight: 1 });
+                marker._id = `T${treeIdCounter++}`;
+                marker.feature = { properties: { id: marker._id, quelle: 'osm' } };
+                marker.on('click', handleFeatureClick);
+                marker.addTo(treeLayer);
+            });
+            osmTreesAdded = added.length;
+            addDebugLog(`OSM-Auszug (Stand ${osm.stand}): ${osm.trees.length} Bäume, davon ${duplicates} schon im Kataster, ` +
+                `${added.length} ergänzt.`);
+        }
+
         //Funktion Laden Gebäude
         async function loadBuildings() {
             buildingLayer.clearLayers();
@@ -2314,6 +2599,24 @@
                             let maxPointsForType = -1;
                             let bestConfigForType = null;
 
+                            // Speed-ups that do not change the result:
+                            // - With polygon.bbox set, turf.booleanPointInPolygon rejects points
+                            //   outside the bounding box without walking every ring (each tree
+                            //   and building buffer is a hole, so the rings are long).
+                            // - Rotating keeps a point's distance to the pivot, so grid points
+                            //   farther from the pivot than any corner of the bounding box can
+                            //   never end up inside; they are dropped before rotating. The
+                            //   planar distance differs from turf's rhumb distance by far less
+                            //   than the 10 % margin at these scales.
+                            polygon.bbox = turf.bbox(polygon);
+                            const pivot = turf.centerOfMass(polygon);
+                            const [pivotX, pivotY] = pivot.geometry.coordinates;
+                            const kx = Math.cos(pivotY * Math.PI / 180);
+                            const planarDist = (x, y) => Math.hypot((x - pivotX) * kx, y - pivotY);
+                            const reach = 1.1 * Math.max(
+                                planarDist(minX_orig, minY_orig), planarDist(minX_orig, maxY_orig),
+                                planarDist(maxX_orig, minY_orig), planarDist(maxX_orig, maxY_orig));
+
                             for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
                                 for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
                                     const shiftX = xShiftStep * stepSize;
@@ -2324,8 +2627,11 @@
                                         shiftY, 0, { units: "meters" }
                                     );
 
+                                    const reachableGrid = turf.featureCollection(shiftedGrid.features.filter((p) =>
+                                        planarDist(p.geometry.coordinates[0], p.geometry.coordinates[1]) <= reach));
+
                                     angles.forEach((angle) => {
-                                        const rotatedGrid = turf.transformRotate(shiftedGrid, angle, { pivot: turf.centerOfMass(polygon) });
+                                        const rotatedGrid = turf.transformRotate(reachableGrid, angle, { pivot });
                                         const pointsInside = rotatedGrid.features.filter((p) => turf.booleanPointInPolygon(p, polygon));
 
                                         if (pointsInside.length > maxPointsForType) {
@@ -2391,29 +2697,35 @@
                         // GeoJSON erstellen und Puffern
                         let geojsonFeature;
                         if (layer instanceof L.Polygon) {
-                            let latlngs = layer.getLatLngs()[0];
-                            if (latlngs[0].lat !== latlngs[latlngs.length - 1].lat || latlngs[0].lng !== latlngs[latlngs.length - 1].lng) {
-                                latlngs.push(latlngs[0]); // Polygon schließen
-                            }
-                            geojsonFeature = turf.polygon([latlngs.map(ll => [ll.lng, ll.lat])]);
+                            // Alle Ringe: der äußere und die Innenringe (Innenhöfe).
+                            // Ein einfaches Polygon liefert [Ring], eines mit Loch [außen, Loch, ...].
+                            let rings = layer.getLatLngs();
+                            if (rings.length && !Array.isArray(rings[0])) rings = [rings];
+                            const coords = rings.map(ring => {
+                                const c = ring.map(ll => [ll.lng, ll.lat]);
+                                const first = c[0], last = c[c.length - 1];
+                                if (first[0] !== last[0] || first[1] !== last[1]) c.push(first); // Ring schließen
+                                return c;
+                            }).filter(c => c.length >= 4);
+                            geojsonFeature = turf.polygon(coords);
                         } else if (layer instanceof L.CircleMarker) {
                             const latlng = layer.getLatLng();
                             geojsonFeature = turf.point([latlng.lng, latlng.lat]);
                         }
                         const buffered = turf.buffer(geojsonFeature, distance, { units: 'meters' });
-                        if (buffered.geometry.type === "Polygon") {
-                            const bufferedLatLngs = buffered.geometry.coordinates[0].map(coord => [coord[1], coord[0]]);
-                            if (bufferedLatLngs[0][0] !== bufferedLatLngs[bufferedLatLngs.length - 1][0] ||
-                                bufferedLatLngs[0][1] !== bufferedLatLngs[bufferedLatLngs.length - 1][1]) {
-                                bufferedLatLngs.push(bufferedLatLngs[0]); // Polygon schließen
-                            }
-                            const bufferedPolygon = L.polygon(bufferedLatLngs, { color: color, weight: 1, dashArray: '4' });
+                        // Ein Innenhof bleibt als Loch im Puffer erhalten, um den Abstand
+                        // verkleinert; ist er schmaler als zweimal der Abstand, verschwindet er.
+                        const parts = buffered.geometry.type === "Polygon" ? [buffered.geometry.coordinates]
+                            : buffered.geometry.type === "MultiPolygon" ? buffered.geometry.coordinates : [];
+                        parts.forEach(part => {
+                            const bufferedRings = part.map(ring => ring.map(coord => [coord[1], coord[0]]));
+                            const bufferedPolygon = L.polygon(bufferedRings, { color: color, weight: 1, dashArray: '4' });
                             // ID zuweisen und in feature.properties speichern
                             const bufferId = `P${bufferIdCounter++}`;
                             bufferedPolygon._id = bufferId;
                             bufferedPolygon.feature = { properties: { id: bufferId } };
                             bufferedPolygon.addTo(bufferLayer);
-                        }
+                        });
                     } catch (error) {
                         addDebugLog("Fehler beim Puffern: " + error.message);
                     }
@@ -2428,8 +2740,14 @@
             addDebugLog("Starte Anpassung der Sondenfläche für alle Nutzer-Polygone...");
             const reader = new jsts.io.GeoJSONReader();
             const writer = new jsts.io.GeoJSONWriter();
+            const factory = new jsts.geom.GeometryFactory();
             const results = [];
             let totalArea = 0;
+            // Alle Puffer einmal einlesen.
+            const bufferGeoms = [];
+            bufferLayer.eachLayer(function (layer) {
+                try { bufferGeoms.push(reader.read(layer.toGeoJSON().geometry)); } catch (error) { }
+            });
             // Iteriere über alle Nutzer-Polygone in drawnItems
             drawnItems.eachLayer(function (userPolygon) {
                 if (!(userPolygon instanceof L.Polygon)) {
@@ -2439,16 +2757,30 @@
                 const userGeoJSON = userPolygon.toGeoJSON();
                 const userJstsPolygon = reader.read(userGeoJSON.geometry);
                 let currentPolygon = userJstsPolygon;
-                // Differenz mit jedem Puffer berechnen
-                bufferLayer.eachLayer(function (bufferLayer) {
-                    try {
-                        const bufferGeoJSON = bufferLayer.toGeoJSON();
-                        const bufferJstsPolygon = reader.read(bufferGeoJSON.geometry);
-                        if (currentPolygon.intersects(bufferJstsPolygon)) {
-                            currentPolygon = currentPolygon.difference(bufferJstsPolygon);
-                        }
-                    } catch (error) { }
-                });
+                // Nur Puffer, deren Umriss-Rechteck das Polygon berührt.
+                const env = userJstsPolygon.getEnvelopeInternal();
+                const hits = bufferGeoms.filter(g => env.intersects(g.getEnvelopeInternal()));
+                // Erst alle Puffer vereinigen, dann einmal abziehen. Puffer einzeln
+                // nacheinander abzuziehen wird mit vielen Bäumen quadratisch langsam
+                // (1400 Bäume: 26 s statt unter 1 s), weil die Restfläche mit jedem
+                // Schritt mehr Löcher bekommt. Das Ergebnis ist dasselbe.
+                try {
+                    if (hits.length > 0) {
+                        const union = jsts.operation.union.UnaryUnionOp.union(factory.createGeometryCollection(hits));
+                        currentPolygon = userJstsPolygon.difference(union);
+                    }
+                } catch (error) {
+                    // Rückfall bei Geometriefehlern: einzeln abziehen, fehlerhafte Puffer überspringen.
+                    addDebugLog("Vereinigung der Puffer fehlgeschlagen (" + error.message + "), ziehe einzeln ab.");
+                    currentPolygon = userJstsPolygon;
+                    hits.forEach(function (bufferJstsPolygon) {
+                        try {
+                            if (currentPolygon.intersects(bufferJstsPolygon)) {
+                                currentPolygon = currentPolygon.difference(bufferJstsPolygon);
+                            }
+                        } catch (error) { }
+                    });
+                }
                 // Save resulting polygon if valid
                 if (currentPolygon && !currentPolygon.isEmpty()) {
                     const resultGeoJSON = writer.write(currentPolygon);
@@ -2947,7 +3279,8 @@
 
             // Kartenquellen
             const quellen = [map.hasLayer(satelliteLayer) ? 'Esri' : '© OpenStreetMap-Mitwirkende'];
-            if ([wmsLayer, wmsLayerWarmeleitfahigkeit, alkisLayer, rupeltonLayer].some((l) => map.hasLayer(l))) quellen.push('© Geoportal Berlin');
+            if (buildingsTreesSource === 'berlin' || [wmsLayer, wmsLayerWarmeleitfahigkeit, alkisLayer, rupeltonLayer].some((l) => map.hasLayer(l))) quellen.push('© Geoportal Berlin');
+            if (map.hasLayer(satelliteLayer) && (osmTreesAdded > 0 || buildingsTreesSource === 'osm')) quellen.push('Gebäude/Bäume © OpenStreetMap-Mitwirkende');
             const attr = quellen.join(' · ');
             ctx.font = font(400, 9.5);
             const aw = ctx.measureText(attr).width + 14;
