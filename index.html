@@ -280,8 +280,17 @@
                     <div class="flex items-center justify-between group">
                         <label for="sondenTiefe" class="text-sm text-zinc-600 font-medium">Sondentiefe <span
                                 class="text-zinc-400 font-normal">[m]</span></label>
-                        <input type="number" id="sondenTiefe" value="100" min="0" step="1"
+                        <input type="number" id="sondenTiefe" value="" placeholder="–" min="0" step="1"
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
+                    </div>
+                    <div class="flex items-center justify-between gap-2 -mt-1">
+                        <span id="tiefeInfo" class="text-xs leading-snug text-zinc-500">Maximale Tiefe wird nach der Berechnung ermittelt.</span>
+                        <div class="inline-flex shrink-0 rounded border border-zinc-200 overflow-hidden text-xs" role="group" aria-label="Sondentiefe: automatisch oder manuell">
+                            <button type="button" id="tiefeAutoBtn" onclick="setzeTiefeModus('auto')" aria-pressed="true"
+                                title="Sondentiefe automatisch auf die maximal mögliche Tiefe am Standort setzen">Auto</button>
+                            <button type="button" id="tiefeManuellBtn" onclick="setzeTiefeModus('manuell')" aria-pressed="false"
+                                title="Sondentiefe selbst festlegen">Manuell</button>
+                        </div>
                     </div>
 
                     <div class="flex items-center justify-between group">
@@ -531,6 +540,7 @@
 - Tiefgaragen und andere unterirdische Gebäude werden jetzt als Ausschlussfläche berücksichtigt.
 - Bäume auf Privatgrundstücken, die das Baumkataster nicht enthält, werden aus OpenStreetMap ergänzt. Bäume, die in beiden Quellen stehen, werden nur einmal gezählt.
 - Die Berechnung ist deutlich schneller. Sondenanzahl und -positionen bleiben gleich.
+- Die Sondentiefe steht standardmäßig auf „Auto“: die maximal mögliche Tiefe am Standort (Oberkante Rupelton, ohne Sicherheitsabstand; 400 m ohne Begrenzung). Die verwendete Tiefe wird angezeigt und lässt sich jederzeit überschreiben („Manuell“). Außerhalb Berlins ist Auto nicht verfügbar; dann gelten 100 m. PDF- und PNG-Export nennen, ob die Tiefe automatisch oder manuell gesetzt wurde.
 
 ## Version 3.3.0 (14.11.2026)
 
@@ -1538,6 +1548,82 @@
         }
         // BERLIN_WFS_END
 
+        // TIEFE_AUTO_BEGIN
+        // Automatische Sondentiefe: die maximal mögliche Tiefe am Standort. Die Sonde darf den
+        // Rupelton nicht durchstoßen, also gilt dessen Oberkante, ohne Sicherheitsabstand und
+        // ungerundet. Ohne Rupelton-Begrenzung gelten in Berlin 400 m. Außerhalb Berlins oder
+        // ohne Ergebnis der Abfrage gibt es keinen Wert (null); dann rechnet die App mit
+        // TIEFE_STANDARD und meldet Auto als nicht verfügbar.
+        // DOM-frei, damit tests/test_geocheck_app_tiefe_auto.py den Block mit Node ausführt.
+        const TIEFE_STANDARD = 100;
+        const TIEFE_MAX_BERLIN = 400;
+
+        // rupeltonTiefe: Zahl (Oberkante Rupelton in m), "Keine Restriktion" oder "Keine Daten".
+        function autoTiefeAusRupelton(rupeltonTiefe, imBerlin) {
+            if (!imBerlin) return null;
+            if (rupeltonTiefe === "Keine Restriktion") return TIEFE_MAX_BERLIN;
+            if (typeof rupeltonTiefe === "number" && Number.isFinite(rupeltonTiefe) && rupeltonTiefe > 0) return rupeltonTiefe;
+            return null;
+        }
+        // TIEFE_AUTO_END
+
+        // Zustand der Sondentiefe: Modus 'auto' (Standard) oder 'manuell'. tiefeAuto ist die
+        // maximal mögliche Tiefe am Standort: undefined = noch nicht ermittelt, null = nicht
+        // verfügbar, sonst die Tiefe in m.
+        let tiefeModus = 'auto';
+        let tiefeAuto;
+
+        function tiefeText(m) {
+            return m.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' m';
+        }
+
+        // Herkunft der verwendeten Sondentiefe für Anzeige und Export.
+        function tiefeHerkunft() {
+            if (tiefeModus === 'manuell') return 'manuell';
+            return typeof tiefeAuto === 'number' ? 'automatisch, maximal möglich' : 'Standardwert, Auto nicht verfügbar';
+        }
+
+        // Überträgt Modus und Auto-Wert in Eingabefeld, Schalter und Hinweistext.
+        function zeigeTiefe() {
+            const input = document.getElementById('sondenTiefe');
+            const info = document.getElementById('tiefeInfo');
+            if (!input || !info) return;
+            const auto = tiefeModus === 'auto';
+            // Auto vor der Ermittlung: kein Wert, nur Strich. Nicht verfügbar: Standardwert.
+            if (auto) input.value = typeof tiefeAuto === 'number' ? tiefeAuto : (tiefeAuto === null ? TIEFE_STANDARD : '');
+            for (const [id, aktiv] of [['tiefeAutoBtn', auto], ['tiefeManuellBtn', !auto]]) {
+                const b = document.getElementById(id);
+                b.setAttribute('aria-pressed', String(aktiv));
+                b.className = 'px-2 py-1 ' + (aktiv ? 'bg-zinc-800 text-white' : 'bg-white text-zinc-600 hover:bg-zinc-100');
+            }
+            let text;
+            if (typeof tiefeAuto === 'number') {
+                text = auto ? `Maximal mögliche Tiefe am Standort: ${tiefeText(tiefeAuto)}`
+                    : `Maximal möglich wären ${tiefeText(tiefeAuto)} (Auto).`;
+            } else if (tiefeAuto === null) {
+                text = auto ? `Auto nicht verfügbar, es wird mit ${tiefeText(TIEFE_STANDARD)} gerechnet.` : 'Auto nicht verfügbar.';
+            } else {
+                text = auto ? 'Maximale Tiefe wird nach der Berechnung ermittelt.' : '';
+            }
+            info.textContent = text;
+        }
+
+        function setzeTiefeModus(modus) {
+            tiefeModus = modus;
+            // Von Auto ohne Wert auf Manuell: mit dem Standardwert starten.
+            if (modus === 'manuell' && document.getElementById('sondenTiefe').value === '') {
+                document.getElementById('sondenTiefe').value = TIEFE_STANDARD;
+            }
+            zeigeTiefe();
+            if (typeof updateResultsWithoutColorReset === 'function' && geothermalPointsLayer) updateResultsWithoutColorReset();
+        }
+
+        // wert: Zahl, null (nicht verfügbar) oder undefined (zurücksetzen, wird neu ermittelt).
+        function setzeAutoTiefe(wert) {
+            tiefeAuto = wert;
+            zeigeTiefe();
+        }
+
         // OSM_TREES_BEGIN
         // Bäume auf Privatgrund fehlen im Berliner Baumkataster. Sie kommen aus einem
         // OSM-Auszug, den scripts/build_osm_trees.py als Kacheln neben die Seite legt
@@ -1735,6 +1821,7 @@
             }
             geothermalPointsLayer.clearLayers();
             adjustedPolygonLayer.clearLayers();
+            setzeAutoTiefe(undefined);
 
             // Reset Displays
             document.querySelector("#sondenAnzahl .font-mono").textContent = "0";
@@ -1818,6 +1905,8 @@
                 checkPotenzial(rupelton),
                 checkThermalConductivity()
             ]);
+            // Ohne Ergebnis der Rupelton-Abfrage (z. B. keine Sonden) ist Auto nicht verfügbar.
+            if (tiefeAuto === undefined) { setzeAutoTiefe(null); updateResultsWithoutColorReset(); }
             logTimestamp("Service-Abfragen fertig");
 
             addDebugLog("Vollständiger Prozess abgeschlossen.");
@@ -2014,6 +2103,8 @@
                         .catch(error => { addDebugLog(`Fehler WMS Potential: ${error.message}`); });
 
                     Promise.all([p1, p2, p3]).then(() => {
+                        setzeAutoTiefe(autoTiefeAusRupelton(rupeltonDepth, bboxIntersectsBerlin([lat, lng, lat, lng])));
+                        updateResultsWithoutColorReset();
                         const auflageTeile = [];
                         if (restriction.name !== "Erdwärmenutzung grundsätzlich erlaubt") auflageTeile.push(restriction.name);
                         if (rupeltonTyp) auflageTeile.push(rupeltonTyp);
@@ -2914,7 +3005,7 @@
                             `Abstand zu Gebäuden: ${document.getElementById("gebäudeAbstand").value} m`,
                             `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m`,
                             `Abstand zu Restriktionsflächen: ${document.getElementById("restriktionAbstand").value} m`,
-                            `Sondentiefe: ${document.getElementById("sondenTiefe").value} m`,
+                            `Sondentiefe: ${document.getElementById("sondenTiefe").value} m (${tiefeHerkunft()})`,
                             `Wärmeleitfähigkeit: ${document.getElementById("lambdaBoden").value} W/(m·K)`,
                             `Volllaststunden: ${document.getElementById("volllaststunden").value} h/a`,
                             `Auslegungszeitraum: ${document.getElementById("auslegungszeitraum").selectedOptions[0].text}`,
@@ -3157,7 +3248,7 @@
             const cop = Number.isFinite(copValue) ? copValue.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : '-';
             const regeneration = getParameterValues().regeneration;
             const hero = [
-                { label: 'Sondenanzahl', v: [anzahl, anzahl === '1' ? 'Sonde' : 'Sonden'], sub: `je ${tiefe} m tief` },
+                { label: 'Sondenanzahl', v: [anzahl, anzahl === '1' ? 'Sonde' : 'Sonden'], sub: `je ${tiefe} m tief` + (tiefeModus === 'auto' && typeof tiefeAuto === 'number' ? ' (maximal)' : '') },
                 {
                     label: 'Regeneration',
                     v: [(Math.min(regeneration, 1) * 100).toLocaleString('de-DE', { maximumFractionDigits: 1 }), '%'],
@@ -3540,6 +3631,7 @@
             if (rupeltonElement) {
                 rupeltonElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton</span> -`;
             }
+            setzeAutoTiefe(undefined);
         }
 
         //Export-Funktion als GeoGjson
@@ -3674,7 +3766,9 @@
                         if (data.geothermalPointsLayer.features.length > 0) {
                             const firstProbe = data.geothermalPointsLayer.features[0];
                             if (firstProbe.properties && firstProbe.properties.depth) {
+                                tiefeModus = 'manuell';
                                 document.getElementById('sondenTiefe').value = firstProbe.properties.depth;
+                                zeigeTiefe();
                                 addDebugLog(`Sondentiefe auf ${firstProbe.properties.depth}m aktualisiert.`);
                             }
                         }
@@ -3702,6 +3796,11 @@
 
         //Listener - Wenn PArameter Änderung automatische Berechnung
         // Event-Listener für relevante Felder hinzufügen
+        // Tippt der Nutzer eine Tiefe ein, wechselt die Tiefe auf manuell.
+        document.getElementById('sondenTiefe').addEventListener('input', () => {
+            if (tiefeModus !== 'manuell') { tiefeModus = 'manuell'; zeigeTiefe(); }
+        });
+        zeigeTiefe();
         const relevantFields = ['lambdaBoden', 'volllaststunden', 'auslegungszeitraum', 'regenerationsgrad', 'sondenTiefe', 'copWärmepumpe'];
         relevantFields.forEach(fieldId => {
             const input = document.getElementById(fieldId);
