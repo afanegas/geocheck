@@ -1,7 +1,7 @@
 <!--
 	=======================================================
 	Projektname   : Geo-Check light
-	Version       : v3.4.0
+	Version       : v3.5.0
 	Erstellungsdatum : 26.09.2026
 	Autor	      : Alejandro Fanegas
 	Lizenz        : MIT-Lizenz
@@ -232,7 +232,7 @@
             </div>
             <div
                 class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
-                v3.4.0
+                v3.5.0
                 <button type="button" onclick="showChangelog()"
                     class="ml-2 underline hover:text-zinc-700 transition-colors uppercase">Changelog</button>
             </div>
@@ -559,6 +559,10 @@
     <!-- CHANGELOG_BEGIN (Kopie von backend/data/docs/changelog_light.md, vom Test geprüft) -->
     <script type="text/markdown" id="changelog-md">
 # Changelog Geo-Check light
+
+## Version 3.5.0 (20.11.2026)
+
+- Neue Anordnung der Sonden: im Mittel 10 % mehr Sonden, einzeln bis zu 60 %.
 
 ## Version 3.4.0 (19.11.2026)
 
@@ -2622,28 +2626,247 @@
         //------------
         //Funktion zeichnen sonden
         //------------
+        // SONDEN_LAYOUT_BEGIN
+        // Anordnung der Sonden in der nutzbaren Fläche (Fläche minus Puffer).
+        // Gesucht sind möglichst viele Punkte innerhalb der Fläche mit paarweise
+        // mindestens dem Sondenabstand. Drei Stufen:
+        //  1. Versetztes Raster (Reihenabstand B·√3/2, jede zweite Reihe um B/2
+        //     verschoben) über Drehwinkel (Raster und Richtungen der längsten
+        //     Kanten) und Verschiebungen. Gezählt wird exakt über die Schnitte
+        //     jeder Reihe mit der Fläche.
+        //  2. Reihenweise Füllung: gleiche Reihen, aber jede Teilstrecke einer
+        //     Reihe wird vom Rand her gefüllt; zur Nachbarreihe gilt nur noch ein
+        //     Versatz von mindestens B/2 (dann ist der Abstand mindestens B).
+        //     Im offenen Gelände entsteht wieder das versetzte Raster, an
+        //     unregelmäßigen Rändern passen mehr Sonden.
+        //     Stufe 1 und 2 laufen je Teilfläche (größte zuerst); Sonden früherer
+        //     Teilflächen halten dabei den Abstand auch zu späteren.
+        //  3. Lokale Suche auf einem feinen Kandidatenraster (B/8) plus den Rand-
+        //     punkten: freie Plätze besetzen, eine Sonde gegen zwei tauschen,
+        //     Störung und Rückkehr zum Besten (iterierte lokale Suche).
+        //     Feste Iterationszahl und fester Startwert: gleiches Ergebnis bei
+        //     jedem Lauf.
+        // DOM-frei, damit tests/test_geocheck_app_sonden_layout.py den Block mit
+        // Node prüfen kann. Eingabe/Ausgabe in WGS84 [Länge, Breite].
+        const SONDEN_LAYOUT_DEFAULTS = { winkelSchritt: 2, versaetze: 12, kanten: 8, iterationen: 1500, ohneVerbesserung: 600, maxMs: 4000, maxKandidaten: 60000 };
+
+        function sondenFrame(polys) {
+            let sx = 0, sy = 0, n = 0;
+            polys.forEach(p => p[0].forEach(c => { sx += c[0]; sy += c[1]; n++; }));
+            const lon0 = sx / n, lat0 = sy / n, R = 6371008.8;
+            const kx = R * Math.PI / 180 * Math.cos(lat0 * Math.PI / 180), ky = R * Math.PI / 180;
+            return { fwd: c => [(c[0] - lon0) * kx, (c[1] - lat0) * ky], inv: p => [p[0] / kx + lon0, p[1] / ky + lat0] };
+        }
+
+        function sondenKanten(ringe, c, s) {
+            const E = []; let ymin = Infinity, ymax = -Infinity;
+            for (const r of ringe) for (let i = 0; i < r.length - 1; i++) {
+                const ax = r[i][0] * c + r[i][1] * s, ay = -r[i][0] * s + r[i][1] * c;
+                const bx = r[i + 1][0] * c + r[i + 1][1] * s, by = -r[i + 1][0] * s + r[i + 1][1] * c;
+                if (ay === by) continue;
+                E.push(ay < by ? [ax, ay, bx, by] : [bx, by, ax, ay]);
+                ymin = Math.min(ymin, ay, by); ymax = Math.max(ymax, ay, by);
+            }
+            E.sort((p, q) => p[1] - q[1]);
+            return { E, ymin, ymax };
+        }
+
+        // Teilstrecken der Reihe y in der Fläche (gerade/ungerade-Regel), um eps nach innen
+        // verkürzt, ohne die offenen Kreissehnen (Radius sp) um Hindernispunkte.
+        function sondenReihe(E, y, eps, hindernisse, sp) {
+            const xs = [];
+            for (const e of E) { if (e[1] > y) break; if (y < e[3]) xs.push(e[0] + (y - e[1]) * (e[2] - e[0]) / (e[3] - e[1])); }
+            xs.sort((a, b) => a - b);
+            let iv = [];
+            for (let i = 0; i + 1 < xs.length; i += 2) if (xs[i + 1] - xs[i] >= 2 * eps) iv.push([xs[i] + eps, xs[i + 1] - eps]);
+            if (hindernisse && hindernisse.length && iv.length) {
+                const cut = [];
+                for (const o of hindernisse) { const dy = o[1] - y; if (Math.abs(dy) < sp) { const w = Math.sqrt(sp * sp - dy * dy) + 1e-6; cut.push([o[0] - w, o[0] + w]); } }
+                if (cut.length) {
+                    cut.sort((a, b) => a[0] - b[0]);
+                    const out = [];
+                    for (let [a, b] of iv) {
+                        for (const [ca, cb] of cut) { if (cb <= a) continue; if (ca >= b) break; if (ca > a) out.push([a, ca]); a = Math.max(a, cb); if (a > b) break; }
+                        if (a <= b) out.push([a, b]);
+                    }
+                    iv = out;
+                }
+            }
+            return iv;
+        }
+
+        // Reihe vom linken Rand jeder Teilstrecke füllen; zur Vorreihe |dx| >= sp/2.
+        function sondenReiheFuellen(iv, vor, sp) {
+            const half = sp / 2, out = []; let j = 0;
+            for (const [a, b] of iv) {
+                let x = out.length ? Math.max(a, out[out.length - 1] + sp) : a;
+                while (x <= b) {
+                    while (j < vor.length && vor[j] <= x - half + 1e-9) j++;
+                    if (j < vor.length && vor[j] < x + half - 1e-9) { x = vor[j] + half; continue; }
+                    out.push(x); x += sp;
+                }
+            }
+            return out;
+        }
+
+        // Stufe 1 und 2 für eine Teilfläche (Ringe in Metern).
+        function sondenTeilflaeche(ringe, hindernisse, sp, o) {
+            const h = sp * Math.sqrt(3) / 2, eps = 0.01;
+            const winkel = [];
+            for (let a = 0; a < 360; a += o.winkelSchritt) winkel.push(a * Math.PI / 180);
+            const kanten = [];
+            for (const r of ringe) for (let i = 0; i < r.length - 1; i++)
+                kanten.push([Math.hypot(r[i + 1][0] - r[i][0], r[i + 1][1] - r[i][1]), Math.atan2(r[i + 1][1] - r[i][1], r[i + 1][0] - r[i][0])]);
+            kanten.sort((a, b) => b[0] - a[0]);
+            kanten.slice(0, o.kanten).forEach(([, t]) => winkel.push(t, t + Math.PI));
+            let best = { n: 0, make: () => [] };
+            for (const th of winkel) {
+                const c = Math.cos(th), s = Math.sin(th);
+                const { E, ymin, ymax } = sondenKanten(ringe, c, s);
+                const hin = hindernisse.map(p => [p[0] * c + p[1] * s, -p[0] * s + p[1] * c]);
+                const zurueck = (x, y) => [x * c - y * s, x * s + y * c];
+                for (let k = 0; k < o.versaetze; k++) {
+                    const reihen = [];
+                    for (let y = ymin + (k + 0.5) / o.versaetze * h; y <= ymax; y += h) reihen.push([y, sondenReihe(E, y, eps, hin, sp)]);
+                    // Stufe 2: reihenweise Füllung
+                    let vor = [], n = 0; const voll = [];
+                    for (const [y, iv] of reihen) { const r = sondenReiheFuellen(iv, vor, sp); voll.push([y, r]); n += r.length; vor = r; }
+                    if (n > best.n) best = { n, make: () => voll.flatMap(([y, xs]) => xs.map(x => zurueck(x, y))) };
+                    // Stufe 1: versetztes Raster
+                    for (let m = 0; m < o.versaetze; m++) {
+                        const x0 = m / o.versaetze * sp; let n1 = 0;
+                        reihen.forEach(([, iv], i) => {
+                            const xr = x0 + (i % 2) * sp / 2;
+                            for (const [a, b] of iv) { const z = Math.floor((b - xr) / sp) - Math.ceil((a - xr) / sp) + 1; if (z > 0) n1 += z; }
+                        });
+                        if (n1 > best.n) best = { n: n1, make: () => {
+                            const pts = [];
+                            reihen.forEach(([y, iv], i) => {
+                                const xr = x0 + (i % 2) * sp / 2;
+                                for (const [a, b] of iv) for (let z = Math.ceil((a - xr) / sp); xr + z * sp <= b; z++) pts.push(zurueck(xr + z * sp, y));
+                            });
+                            return pts;
+                        } };
+                    }
+                }
+            }
+            return best.make();
+        }
+
+        // Stufe 3: iterierte lokale Suche (maximale unabhängige Menge im Kreisscheibengraphen).
+        function sondenLokaleSuche(ringe, start, sp, flaeche, o) {
+            const delta = Math.max(sp / 8, Math.sqrt(flaeche / o.maxKandidaten));
+            const { E, ymin, ymax } = sondenKanten(ringe, 1, 0);
+            const C = [];
+            for (let y = ymin + delta / 2; y <= ymax; y += delta) for (const [a, b] of sondenReihe(E, y, 0.01, null, sp)) {
+                for (let x = a; x < b; x += delta) C.push([x, y]);
+                C.push([b, y]);
+            }
+            const startIdx = start.map(p => C.push(p) - 1);
+            const zelle = new Map(), key = (ix, iy) => ix + ',' + iy;
+            C.forEach((p, i) => { const k = key(Math.floor(p[0] / sp), Math.floor(p[1] / sp)); if (!zelle.has(k)) zelle.set(k, []); zelle.get(k).push(i); });
+            const nb = new Array(C.length);
+            const nachbarn = i => {
+                if (nb[i]) return nb[i];
+                const [x, y] = C[i], ix = Math.floor(x / sp), iy = Math.floor(y / sp), out = [];
+                for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++)
+                    for (const j of zelle.get(key(ix + dx, iy + dy)) || []) if (j !== i && Math.hypot(C[j][0] - x, C[j][1] - y) < sp - 1e-6) out.push(j);
+                return (nb[i] = out);
+            };
+            const eng = new Int32Array(C.length), sel = new Uint8Array(C.length); let n = 0;
+            const add = i => { sel[i] = 1; n++; for (const j of nachbarn(i)) eng[j]++; };
+            const rem = i => { sel[i] = 0; n--; for (const j of nachbarn(i)) eng[j]--; };
+            startIdx.forEach(add);
+            const auffuellen = () => {
+                const frei = [];
+                for (let i = 0; i < C.length; i++) if (!sel[i] && eng[i] === 0) frei.push(i);
+                frei.sort((a, b) => nachbarn(a).length - nachbarn(b).length || a - b);
+                for (const i of frei) if (!sel[i] && eng[i] === 0) add(i);
+            };
+            const tauschen = () => { // eine Sonde gegen zwei
+                let weiter = true;
+                while (weiter) {
+                    weiter = false;
+                    for (let v = 0; v < C.length; v++) {
+                        if (!sel[v]) continue;
+                        const nur = nachbarn(v).filter(j => !sel[j] && eng[j] === 1);
+                        outer: for (let a = 0; a < nur.length; a++) for (let b = a + 1; b < nur.length; b++) {
+                            const p = C[nur[a]], q = C[nur[b]];
+                            if (Math.hypot(p[0] - q[0], p[1] - q[1]) >= sp - 1e-6) { rem(v); add(nur[a]); add(nur[b]); weiter = true; break outer; }
+                        }
+                    }
+                }
+            };
+            const auswahl = () => { const r = []; for (let i = 0; i < C.length; i++) if (sel[i]) r.push(i); return r; };
+            auffuellen(); tauschen(); auffuellen();
+            let bestN = n, best = auswahl();
+            let seed = 12345; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+            const t0 = Date.now();
+            for (let it = 0, ohne = 0; it < o.iterationen && ohne < o.ohneVerbesserung && Date.now() - t0 < o.maxMs; it++, ohne++) {
+                const k = rnd() < 0.5 ? 1 : 2;
+                for (let r = 0; r < k; r++) {
+                    const i = Math.floor(rnd() * C.length);
+                    if (sel[i]) continue;
+                    for (const j of nachbarn(i)) if (sel[j]) rem(j);
+                    add(i);
+                }
+                auffuellen(); tauschen(); auffuellen();
+                if (n > bestN) { bestN = n; best = auswahl(); ohne = 0; }
+                else if (n < bestN - 1) { for (let i = 0; i < C.length; i++) if (sel[i]) rem(i); best.forEach(add); }
+            }
+            return best.map(i => C[i]);
+        }
+
+        // polygone: GeoJSON-Koordinaten von Polygonen ([[außen], [loch], ...], [Länge, Breite]).
+        // -> { punkte: [[Länge, Breite], ...], stufe1und2: Anzahl vor der lokalen Suche }
+        function sondenAnordnen(polygone, sondenAbstand, optionen) {
+            const o = Object.assign({}, SONDEN_LAYOUT_DEFAULTS, optionen);
+            if (!polygone.length) return { punkte: [], stufe1und2: 0 };
+            // 2 mm Reserve: der ebene Rahmen weicht über einige hundert Meter um
+            // Bruchteile eines Millimeters vom Abstand auf der Kugel ab.
+            const sp = sondenAbstand + 0.002;
+            const F = sondenFrame(polygone);
+            const ringFlaeche = r => { let a = 0; for (let i = 0; i < r.length - 1; i++) a += r[i][0] * r[i + 1][1] - r[i + 1][0] * r[i][1]; return Math.abs(a) / 2; };
+            const teile = polygone.map(p => {
+                const ringe = p.map(r => r.map(F.fwd));
+                return { ringe, flaeche: ringFlaeche(ringe[0]) - ringe.slice(1).reduce((t, r) => t + ringFlaeche(r), 0) };
+            }).sort((a, b) => b.flaeche - a.flaeche);
+            const punkte = [];
+            for (const t of teile) {
+                const xs = t.ringe[0];
+                const minx = Math.min(...xs.map(p => p[0])) - sp, maxx = Math.max(...xs.map(p => p[0])) + sp;
+                const miny = Math.min(...xs.map(p => p[1])) - sp, maxy = Math.max(...xs.map(p => p[1])) + sp;
+                const hin = punkte.filter(p => p[0] > minx && p[0] < maxx && p[1] > miny && p[1] < maxy);
+                sondenTeilflaeche(t.ringe, hin, sp, o).forEach(p => punkte.push(p));
+            }
+            const stufe1und2 = punkte.length;
+            const alleRinge = teile.flatMap(t => t.ringe);
+            const flaeche = teile.reduce((s, t) => s + t.flaeche, 0);
+            const ergebnis = o.iterationen > 0 ? sondenLokaleSuche(alleRinge, punkte, sp, flaeche, o) : punkte;
+            return { punkte: ergebnis.map(F.inv), stufe1und2 };
+        }
+        // SONDEN_LAYOUT_END
+
         function generateGeothermalPoints() {
             try {
-                addDebugLog("Starting optimization of geothermal probe points...");
-                // Retrieve all adjusted polygons from the map - now restricted to adjustedPolygonLayer
-                let adjustedPolygons = [];
-
+                addDebugLog("Starte Anordnung der Sondenpunkte...");
+                // Alle nutzbaren Teilflächen (adjustedPolygonLayer) gemeinsam: so halten
+                // Sonden auch über Teilflächen und Nutzerpolygone hinweg den Abstand.
+                const polygone = [];
                 function findPolygons(group) {
                     group.eachLayer(function (layer) {
-                        if (layer instanceof L.Polygon || layer instanceof L.MultiPolygon) {
-                            adjustedPolygons.push(layer.toGeoJSON());
+                        if (layer instanceof L.Polygon) {
+                            const g = layer.toGeoJSON().geometry;
+                            if (g.type === "Polygon") polygone.push(g.coordinates);
+                            else if (g.type === "MultiPolygon") g.coordinates.forEach(c => polygone.push(c));
                         } else if (layer.eachLayer) {
                             findPolygons(layer);
-                        } else if (layer.feature && layer.feature.geometry &&
-                            (layer.feature.geometry.type === "Polygon" || layer.feature.geometry.type === "MultiPolygon")) {
-                            adjustedPolygons.push(layer.toGeoJSON());
                         }
                     });
                 }
-
                 findPolygons(adjustedPolygonLayer);
 
-                if (adjustedPolygons.length === 0) {
+                if (polygone.length === 0) {
                     addDebugLog("No adjusted polygons found. The process cannot continue.");
                     return;
                 }
@@ -2654,181 +2877,24 @@
                 }
 
                 geothermalPointsLayer.clearLayers(); // Clear previous geothermal points
-                // Check the number of sub-polygons
-                let totalSubPolygons = 0;
-                adjustedPolygons.forEach((geoJSONPolygon) => {
-                    if (geoJSONPolygon.geometry.type === "MultiPolygon") {
-                        totalSubPolygons += geoJSONPolygon.geometry.coordinates.length;
-                    } else if (geoJSONPolygon.geometry.type === "Polygon") {
-                        totalSubPolygons += 1;
-                    }
-                });
-                // If the total number of sub-polygons exceeds Max, show a warning message
                 const MAX_SUBPOLYGONS = 30; // Define the threshold as a constant
-                if (totalSubPolygons > MAX_SUBPOLYGONS) {
+                if (polygone.length > MAX_SUBPOLYGONS) {
                     showErrorDialog(
-                        `Die Anzahl der resultierenden Teilflächen (${totalSubPolygons}) ist zu hoch. Bitte zeichnen Sie ein kleineres Polygon (max. ${MAX_SUBPOLYGONS} Teilflächen), um den Prozess fortzusetzen.`
+                        `Die Anzahl der resultierenden Teilflächen (${polygone.length}) ist zu hoch. Bitte zeichnen Sie ein kleineres Polygon (max. ${MAX_SUBPOLYGONS} Teilflächen), um den Prozess fortzusetzen.`
                     );
                     return;
                 }
-                // Process each polygon separately
-                adjustedPolygons.forEach((geoJSONPolygon, polygonIndex) => {
-                    const polygons = geoJSONPolygon.geometry.type === "MultiPolygon"
-                        ? geoJSONPolygon.geometry.coordinates.map(coords => turf.polygon(coords))
-                        : [turf.polygon(geoJSONPolygon.geometry.coordinates)];
-                    polygons.forEach((polygon, subPolygonIndex) => {
-                        const outerRing = polygon.geometry.coordinates[0];
-                        if (!outerRing || outerRing.length < 4) {
-                            return;
-                        }
-                        // Ensure the outer ring is counter-clockwise
-                        if (turf.booleanClockwise(outerRing)) {
-                            outerRing.reverse();
-                        }
 
-                        // Compute the 2 longest lines of the polygon
-                        const lineSegments = [];
-                        for (let i = 0; i < outerRing.length - 1; i++) {
-                            const start = turf.point(outerRing[i]);
-                            const end = turf.point(outerRing[i + 1]);
-                            const line = turf.lineString([outerRing[i], outerRing[i + 1]]);
-                            const length = turf.length(line, { units: 'meters' });
-                            lineSegments.push({ line, length, start, end });
-                        }
-                        // Sort by length and select the top 2 longest lines
-                        lineSegments.sort((a, b) => b.length - a.length);
-                        const topLines = lineSegments.slice(0, 2);
-
-                        // Extract angles of the top lines
-                        const angles = topLines.map(({ start, end }) => {
-                            const startCoord = start.geometry.coordinates;
-                            const endCoord = end.geometry.coordinates;
-                            const angle = turf.bearing(turf.point(startCoord), turf.point(endCoord));
-                            const normalizedAngle = angle >= 0 ? angle : angle + 360; // Normalize to [0, 360)
-                            return normalizedAngle;
-                        });
-
-                        // Create a larger grid
-                        const bbox = turf.bbox(polygon);
-                        const [minX_orig, minY_orig, maxX_orig, maxY_orig] = bbox;
-                        const diagonalDistance = Math.sqrt(Math.pow(maxX_orig - minX_orig, 2) + Math.pow(maxY_orig - minY_orig, 2));
-                        const margin = diagonalDistance / 2;
-                        const expandedBbox = [minX_orig - margin, minY_orig - margin, maxX_orig + margin, maxY_orig + margin];
-
-                        // --- GRID OPTIMIZATION (SQUARE VS STAGGERED) ---
-                        const [minX, minY, maxX, maxY] = expandedBbox;
-                        const dyHex = sondenAbstand * Math.sqrt(3) / 2;
-                        const steps = 12; // Shifting steps
-                        const stepSize = sondenAbstand / steps;
-                        const maxShiftSteps = Math.ceil((sondenAbstand / 2) / stepSize);
-
-                        let bestGlobalConfig = { count: -1, type: 'none', points: [], angle: 0 };
-
-                        // const gridTypes = ['Square', 'Hexagonal']; // Square functionality kept for future use. Do not erase.
-                        const gridTypes = ['Hexagonal'];
-
-                        gridTypes.forEach(type => {
-                            let gridBase;
-                            if (type === 'Square') {
-                                gridBase = turf.pointGrid(expandedBbox, sondenAbstand, { units: "meters" });
-                            } else {
-                                // Specialized Staggered Grid Generation
-                                const hexFeatures = [];
-                                let rowStartPoint = turf.point([minX, minY]);
-                                let rowCount = 0;
-                                const height = turf.distance(turf.point([minX, minY]), turf.point([minX, maxY]), { units: 'meters' });
-                                const estimatedRows = Math.ceil(height / dyHex) + 2;
-
-                                for (let r = 0; r < estimatedRows; r++) {
-                                    const rowOffset = (rowCount % 2 === 0) ? 0 : (sondenAbstand / 2);
-                                    let currentPoint = rowStartPoint;
-                                    if (rowOffset > 0) currentPoint = turf.transformTranslate(currentPoint, rowOffset, 90, { units: 'meters' });
-
-                                    while (true) {
-                                        hexFeatures.push(currentPoint);
-                                        currentPoint = turf.transformTranslate(currentPoint, sondenAbstand, 90, { units: 'meters' });
-                                        if (currentPoint.geometry.coordinates[0] > maxX + 0.005) break;
-                                    }
-                                    rowStartPoint = turf.transformTranslate(rowStartPoint, dyHex, 0, { units: 'meters' });
-                                    rowCount++;
-                                    if (rowStartPoint.geometry.coordinates[1] > maxY + 0.005) break;
-                                }
-                                gridBase = turf.featureCollection(hexFeatures);
-                            }
-
-                            // Optimization Loop for this Grid Type
-                            let maxPointsForType = -1;
-                            let bestConfigForType = null;
-
-                            // Speed-ups that do not change the result:
-                            // - With polygon.bbox set, turf.booleanPointInPolygon rejects points
-                            //   outside the bounding box without walking every ring (each tree
-                            //   and building buffer is a hole, so the rings are long).
-                            // - Rotating keeps a point's distance to the pivot, so grid points
-                            //   farther from the pivot than any corner of the bounding box can
-                            //   never end up inside; they are dropped before rotating. The
-                            //   planar distance differs from turf's rhumb distance by far less
-                            //   than the 10 % margin at these scales.
-                            polygon.bbox = turf.bbox(polygon);
-                            const pivot = turf.centerOfMass(polygon);
-                            const [pivotX, pivotY] = pivot.geometry.coordinates;
-                            const kx = Math.cos(pivotY * Math.PI / 180);
-                            const planarDist = (x, y) => Math.hypot((x - pivotX) * kx, y - pivotY);
-                            const reach = 1.1 * Math.max(
-                                planarDist(minX_orig, minY_orig), planarDist(minX_orig, maxY_orig),
-                                planarDist(maxX_orig, minY_orig), planarDist(maxX_orig, maxY_orig));
-
-                            for (let xShiftStep = 0; xShiftStep <= maxShiftSteps; xShiftStep++) {
-                                for (let yShiftStep = 0; yShiftStep <= maxShiftSteps; yShiftStep++) {
-                                    const shiftX = xShiftStep * stepSize;
-                                    const shiftY = yShiftStep * stepSize;
-
-                                    const shiftedGrid = turf.transformTranslate(
-                                        turf.transformTranslate(gridBase, shiftX, 90, { units: "meters" }),
-                                        shiftY, 0, { units: "meters" }
-                                    );
-
-                                    const reachableGrid = turf.featureCollection(shiftedGrid.features.filter((p) =>
-                                        planarDist(p.geometry.coordinates[0], p.geometry.coordinates[1]) <= reach));
-
-                                    angles.forEach((angle) => {
-                                        const rotatedGrid = turf.transformRotate(reachableGrid, angle, { pivot });
-                                        const pointsInside = rotatedGrid.features.filter((p) => turf.booleanPointInPolygon(p, polygon));
-
-                                        if (pointsInside.length > maxPointsForType) {
-                                            maxPointsForType = pointsInside.length;
-                                            bestConfigForType = { type, count: pointsInside.length, points: pointsInside, angle };
-                                        }
-                                    });
-                                }
-                            }
-
-                            addDebugLog(`${type} grid optimization finished: Max ${maxPointsForType} probes.`);
-                            logTimestamp(`${type} optimization complete`);
-
-                            // Determine Global Winner
-                            if (maxPointsForType > bestGlobalConfig.count) {
-                                bestGlobalConfig = bestConfigForType;
-                            } else if (maxPointsForType === bestGlobalConfig.count && type === 'Square') {
-                                // Default to Square on ties
-                                bestGlobalConfig = bestConfigForType;
-                            }
-                        });
-
-                        addDebugLog(`Winner: ${bestGlobalConfig.type} (${bestGlobalConfig.count} probes)`);
-
-                        // Add the optimal points to the map
-                        bestGlobalConfig.points.forEach((point) => {
-                            const [lng, lat] = point.geometry.coordinates;
-                            L.circleMarker([lat, lng], {
-                                radius: 2.5,
-                                color: "#ef4444",
-                                fillColor: "#ef4444",
-                                fillOpacity: 1,
-                                weight: 0
-                            }).addTo(geothermalPointsLayer);
-                        });
-                    });
+                const ergebnis = sondenAnordnen(polygone, sondenAbstand);
+                addDebugLog(`Sondenanordnung: ${ergebnis.stufe1und2} Sonden aus Raster/Reihen, ${ergebnis.punkte.length} nach lokaler Suche.`);
+                ergebnis.punkte.forEach(([lng, lat]) => {
+                    L.circleMarker([lat, lng], {
+                        radius: 2.5,
+                        color: "#ef4444",
+                        fillColor: "#ef4444",
+                        fillOpacity: 1,
+                        weight: 0
+                    }).addTo(geothermalPointsLayer);
                 });
 
                 updateResults();
