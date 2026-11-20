@@ -290,15 +290,14 @@
                     <div class="flex items-center justify-between group">
                         <label for="bäumeAbstand" class="text-sm text-zinc-600 font-medium">Baumabstand <span
                                 class="text-zinc-400 font-normal">[m]</span></label>
-                        <input type="number" id="bäumeAbstand" value="3" min="0" step="1"
-                            class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" id="kronenNutzen" onclick="schalteKrone()" aria-pressed="true"
+                                class="px-2 py-0.5 text-xs rounded border bg-zinc-800 text-white border-zinc-800"
+                                title="Kronengröße nutzen: Bäume mit Kronendaten erhalten den Kronenradius als Abstand, alle anderen den Baumabstand.">Krone</button>
+                            <input type="number" id="bäumeAbstand" value="3" min="0" step="1"
+                                class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
+                        </div>
                     </div>
-                    <label class="flex items-center gap-2 -mt-1 text-xs text-zinc-500 cursor-pointer"
-                        title="Bäume mit Kronendaten: Abstand = Kronenradius. Alle anderen Bäume: Baumabstand.">
-                        <input type="checkbox" id="kronenNutzen" class="accent-zinc-800">
-                        <span>Kronengröße nutzen (wenn vorhanden)</span>
-                        <span id="kronenInfo"></span>
-                    </label>
 
                     <div class="flex items-center justify-between group">
                         <label for="restriktionAbstand" class="text-sm text-zinc-600 font-medium">Abstand zu
@@ -312,16 +311,12 @@
                     <div class="flex items-center justify-between group">
                         <label for="sondenTiefe" class="text-sm text-zinc-600 font-medium">Sondentiefe <span
                                 class="text-zinc-400 font-normal">[m]</span></label>
-                        <input type="number" id="sondenTiefe" value="" placeholder="–" min="0" step="1"
-                            class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
-                    </div>
-                    <div class="flex items-center justify-between gap-2 -mt-1">
-                        <span id="tiefeInfo" class="text-xs leading-snug text-zinc-500">Maximale Tiefe wird nach der Berechnung ermittelt.</span>
-                        <div class="inline-flex shrink-0 rounded border border-zinc-200 overflow-hidden text-xs" role="group" aria-label="Sondentiefe: automatisch oder manuell">
-                            <button type="button" id="tiefeAutoBtn" onclick="setzeTiefeModus('auto')" aria-pressed="true"
-                                title="Sondentiefe automatisch auf die maximal mögliche Tiefe am Standort setzen">Auto</button>
-                            <button type="button" id="tiefeManuellBtn" onclick="setzeTiefeModus('manuell')" aria-pressed="false"
-                                title="Sondentiefe selbst festlegen">Manuell</button>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" id="tiefeMaxBtn" onclick="schalteTiefeMax()" aria-pressed="true"
+                                class="px-2 py-0.5 text-xs rounded border bg-zinc-800 text-white border-zinc-800"
+                                title="Maximale Tiefe wird nach der Berechnung ermittelt.">max</button>
+                            <input type="number" id="sondenTiefe" value="" placeholder="max" min="0" step="1"
+                                class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                         </div>
                     </div>
 
@@ -570,10 +565,11 @@
 - Gebäude und Bäume werden in Berlin aus dem Geoportal Berlin geladen (ALKIS-Gebäude, Baumkataster) statt aus OpenStreetMap: in unter einer Sekunde statt bis zu einer Minute. Außerhalb Berlins wie bisher aus OpenStreetMap.
 - Innenhöfe von Gebäuden gelten als freie Fläche; dort können Sonden stehen, mit dem Gebäudeabstand zum Hofrand.
 - Tiefgaragen und andere unterirdische Gebäude werden jetzt als Ausschlussfläche berücksichtigt.
-- Bäume auf Privatgrundstücken, die das Baumkataster nicht enthält, werden aus OpenStreetMap ergänzt. Bäume, die in beiden Quellen stehen, werden nur einmal gezählt.
+- Bäume auf Privatgrundstücken, die das Baumkataster nicht enthält, werden aus OpenStreetMap ergänzt.
 - Die Berechnung ist deutlich schneller. Sondenanzahl und -positionen bleiben gleich.
 - Die Sondentiefe steht standardmäßig auf „Auto“: die maximal mögliche Tiefe am Standort (Oberkante Rupelton, ohne Sicherheitsabstand; 400 m ohne Begrenzung). Die verwendete Tiefe wird angezeigt und lässt sich jederzeit überschreiben („Manuell“). Außerhalb Berlins ist Auto nicht verfügbar; dann gelten 100 m. PDF- und PNG-Export nennen, ob die Tiefe automatisch oder manuell gesetzt wurde.
 - Neuer Schalter „Kronengröße nutzen (wenn vorhanden)“: Bäume mit Kronendaten erhalten den Kronenradius als Abstand, alle anderen den Baumabstand.
+- Neue Karten-Ebene „Gebäude (ALKIS)“ (nur Berlin).
 
 ## Version 3.3.0 (14.11.2026)
 
@@ -734,6 +730,16 @@
             maxZoom: 20
         });
 
+        // ALKIS Gebäude (Berlin): zeigt u. a. Garagen und Nebengebäude, auf denen keine Sonde möglich ist
+        const alkisGebaeudeLayer = L.tileLayer.wms("https://gdi.berlin.de/services/wms/alkis_gebaeude?", {
+            layers: 'gebaeude',
+            format: 'image/png',
+            transparent: true,
+            opacity: 0.7,
+            attribution: '© Geoportal Berlin',
+            maxZoom: 20
+        });
+
         // WMS Layer für Rupelton (Geologie) hinzufügen
         const rupeltonLayer = L.tileLayer.wms("https://gdi.berlin.de/services/wms/geologie_rupelton?", {
             layers: 'b_geologie_rupelton_fl',
@@ -754,8 +760,9 @@
         };
         const overlayMaps = {
             "Grundstücksgrenzen (ALKIS)": alkisLayer,
+            "Gebäude (ALKIS)": alkisGebaeudeLayer,
             "Informationen zum wasserbehördlichen Vollzug": rupeltonLayer,
-            "Geothermisches Potenzial, 100 m - 2400 h/a": wmsLayer,
+            "Geothermisches Potenzial, 2 Sonden, 100 m - 2400 h/a": wmsLayer,
             "Spezifische Wärmeleitfähigkeit bis 100 m": wmsLayerWarmeleitfahigkeit
         };
         const layerControl = L.control.layers(baseLayers, overlayMaps, { position: 'topright' }).addTo(map);
@@ -773,7 +780,7 @@
 
         // Radio-Button-Logik und Style für Overlays
         const L_RUPELTON = "Informationen zum wasserbehördlichen Vollzug";
-        const L_GEOPOT = "Geothermisches Potenzial, 100 m - 2400 h/a";
+        const L_GEOPOT = "Geothermisches Potenzial, 2 Sonden, 100 m - 2400 h/a";
         const L_WLF = "Spezifische Wärmeleitfähigkeit bis 100 m";
 
         let legendButtonControl = null;
@@ -1610,6 +1617,16 @@
         }
         // KRONE_END
 
+        function kronenAn() {
+            return document.getElementById('kronenNutzen').getAttribute('aria-pressed') === 'true';
+        }
+        const KRONEN_TITEL = 'Kronengröße nutzen: Bäume mit Kronendaten erhalten den Kronenradius als Abstand, alle anderen den Baumabstand.';
+        function schalteKrone() {
+            const chip = document.getElementById('kronenNutzen');
+            setzeChip(chip, !kronenAn(), false);
+            chip.title = KRONEN_TITEL;
+        }
+
         // Zustand der Sondentiefe: Modus 'auto' (Standard) oder 'manuell'. tiefeAuto ist die
         // maximal mögliche Tiefe am Standort: undefined = noch nicht ermittelt, null = nicht
         // verfügbar, sonst die Tiefe in m.
@@ -1620,43 +1637,44 @@
             return m.toLocaleString('de-DE', { maximumFractionDigits: 2 }) + ' m';
         }
 
+        // Aussehen der kleinen Schalter neben den Eingabefeldern ("max", "Krone").
+        function setzeChip(button, an, deaktiviert) {
+            button.setAttribute('aria-pressed', String(an));
+            button.disabled = !!deaktiviert;
+            button.className = 'px-2 py-0.5 text-xs rounded border ' + (deaktiviert
+                ? 'bg-zinc-100 text-zinc-400 border-zinc-200 cursor-not-allowed'
+                : an ? 'bg-zinc-800 text-white border-zinc-800' : 'bg-white text-zinc-600 border-zinc-300 hover:bg-zinc-100');
+        }
+
         // Herkunft der verwendeten Sondentiefe für Anzeige und Export.
         function tiefeHerkunft() {
             if (tiefeModus === 'manuell') return 'manuell';
-            return typeof tiefeAuto === 'number' ? 'automatisch, maximal möglich' : 'Standardwert, Auto nicht verfügbar';
+            return typeof tiefeAuto === 'number' ? 'maximal möglich' : 'Standardwert, maximale Tiefe nicht verfügbar';
         }
 
-        // Überträgt Modus und Auto-Wert in Eingabefeld, Schalter und Hinweistext.
+        // Überträgt Modus und Maximalwert in Eingabefeld und "max"-Schalter.
         function zeigeTiefe() {
             const input = document.getElementById('sondenTiefe');
-            const info = document.getElementById('tiefeInfo');
-            if (!input || !info) return;
+            const chip = document.getElementById('tiefeMaxBtn');
+            if (!input || !chip) return;
             const auto = tiefeModus === 'auto';
-            // Auto vor der Ermittlung: kein Wert, nur Strich. Nicht verfügbar: Standardwert.
+            // max vor der Ermittlung: kein Wert, nur "max". Nicht verfügbar: Standardwert.
             if (auto) input.value = typeof tiefeAuto === 'number' ? tiefeAuto : (tiefeAuto === null ? TIEFE_STANDARD : '');
-            for (const [id, aktiv] of [['tiefeAutoBtn', auto], ['tiefeManuellBtn', !auto]]) {
-                const b = document.getElementById(id);
-                b.setAttribute('aria-pressed', String(aktiv));
-                b.className = 'px-2 py-1 ' + (aktiv ? 'bg-zinc-800 text-white' : 'bg-white text-zinc-600 hover:bg-zinc-100');
-            }
-            let text;
-            if (typeof tiefeAuto === 'number') {
-                text = auto ? `Maximal mögliche Tiefe am Standort: ${tiefeText(tiefeAuto)}`
-                    : `Maximal möglich wären ${tiefeText(tiefeAuto)} (Auto).`;
-            } else if (tiefeAuto === null) {
-                text = auto ? `Auto nicht verfügbar, es wird mit ${tiefeText(TIEFE_STANDARD)} gerechnet.` : 'Auto nicht verfügbar.';
-            } else {
-                text = auto ? 'Maximale Tiefe wird nach der Berechnung ermittelt.' : '';
-            }
-            info.textContent = text;
+            setzeChip(chip, auto && tiefeAuto !== null, tiefeAuto === null);
+            chip.title = typeof tiefeAuto === 'number'
+                ? (auto ? `Maximal mögliche Tiefe am Standort: ${tiefeText(tiefeAuto)}. Eine eigene Eingabe schaltet max aus.`
+                    : `Klicken: maximal mögliche Tiefe übernehmen (${tiefeText(tiefeAuto)}).`)
+                : tiefeAuto === null ? `Maximale Tiefe nicht verfügbar (nur in Berlin). Es gilt der Standardwert ${tiefeText(TIEFE_STANDARD)}.`
+                : 'Maximale Tiefe wird nach der Berechnung ermittelt.';
         }
 
-        function setzeTiefeModus(modus) {
-            tiefeModus = modus;
-            // Von Auto ohne Wert auf Manuell: mit dem Standardwert starten.
-            if (modus === 'manuell' && document.getElementById('sondenTiefe').value === '') {
-                document.getElementById('sondenTiefe').value = TIEFE_STANDARD;
-            }
+        // Klick auf "max": an = maximal mögliche Tiefe, aus = Wert bleibt stehen und ist manuell.
+        function schalteTiefeMax() {
+            if (tiefeAuto === null) return;
+            tiefeModus = tiefeModus === 'auto' ? 'manuell' : 'auto';
+            // Ohne Wert auf manuell: mit dem Standardwert starten.
+            const input = document.getElementById('sondenTiefe');
+            if (tiefeModus === 'manuell' && input.value === '') input.value = TIEFE_STANDARD;
             zeigeTiefe();
             if (typeof updateResultsWithoutColorReset === 'function' && geothermalPointsLayer) updateResultsWithoutColorReset();
         }
@@ -2332,7 +2350,7 @@
                 sondenAbstand: parseFloat(sondenAbstand),
                 gebäudeAbstand: parseFloat(gebäudeAbstand),
                 bäumeAbstand: parseFloat(bäumeAbstand),
-                kronenNutzen: document.getElementById('kronenNutzen').checked,
+                kronenNutzen: kronenAn(),
                 restriktionAbstand: parseFloat(restriktionAbstand),
                 sondenTiefe: parseFloat(sondenTiefe),
                 lambdaBoden: parseFloat(lambdaBoden),
@@ -2831,12 +2849,12 @@
             bufferFeatures(treeLayer, '#4ade80', baumDistanz);        // Bäume puffern (Green)   
             bufferFeatures(customTreesLayer, '#4ade80', params.bäumeAbstand); // Manuell gezeichnete Bäume puffern
             bufferFeatures(restrictionsLayer, '#fb923c', params.restriktionAbstand);        // Restriktion puffern    
-            const kronenInfo = document.getElementById('kronenInfo');
+            const kronenChip = document.getElementById('kronenNutzen');
             if (params.kronenNutzen) {
                 let alle = 0, mitKrone = 0;
                 treeLayer.eachLayer(l => { alle++; if (kronedurchVon(l) > 0) mitKrone++; });
-                kronenInfo.textContent = `(${mitKrone} von ${alle} Bäumen mit Kronendaten)`;
-            } else kronenInfo.textContent = '';
+                kronenChip.title = `${KRONEN_TITEL} ${mitKrone} von ${alle} Bäumen mit Kronendaten.`;
+            } else kronenChip.title = KRONEN_TITEL;
             addDebugLog("Puffervorgang für alle Layer abgeschlossen.");
         }
 
@@ -3057,7 +3075,7 @@
                         const params = [
                             `Abstand zwischen Sonden: ${document.getElementById("sondenAbstand").value} m`,
                             `Abstand zu Gebäuden: ${document.getElementById("gebäudeAbstand").value} m`,
-                            `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m` + (document.getElementById("kronenNutzen").checked ? ' (mit Kronenradius, wenn vorhanden)' : ''),
+                            `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m` + (kronenAn() ? ' (mit Kronenradius, wenn vorhanden)' : ''),
                             `Abstand zu Restriktionsflächen: ${document.getElementById("restriktionAbstand").value} m`,
                             `Sondentiefe: ${document.getElementById("sondenTiefe").value} m (${tiefeHerkunft()})`,
                             `Wärmeleitfähigkeit: ${document.getElementById("lambdaBoden").value} W/(m·K)`,
@@ -3323,7 +3341,7 @@
                 ['Auslegungszeitraum', document.getElementById('auslegungszeitraum').selectedOptions[0].text],
                 ['Sondenabstand', exportNumber('sondenAbstand') + ' m'],
                 ['Abstand Gebäude', exportNumber('gebäudeAbstand') + ' m'],
-                ['Abstand Bäume', exportNumber('bäumeAbstand') + ' m' + (document.getElementById('kronenNutzen').checked ? ' (Kronenradius)' : '')],
+                ['Abstand Bäume', exportNumber('bäumeAbstand') + ' m' + (kronenAn() ? ' (Kronenradius)' : '')],
             ];
             const eingabeHinweisBox = document.getElementById('eingabeHinweis');
             const warnTexts = eingabeHinweisBox.classList.contains('hidden') ? []
@@ -3868,7 +3886,7 @@
         const distanceFields = ['sondenAbstand', 'gebäudeAbstand', 'bäumeAbstand', 'restriktionAbstand', 'kronenNutzen'];
         distanceFields.forEach(fieldId => {
             const input = document.getElementById(fieldId);
-            input.addEventListener(fieldId === 'kronenNutzen' ? 'change' : 'input', () => {
+            input.addEventListener(fieldId === 'kronenNutzen' ? 'click' : 'input', () => {
                 // Setze nur die Zahlen in den Ergebnis-Texts auf rot
                 const resultElements = [
                     'nutzbareFlaeche',
