@@ -2877,7 +2877,7 @@
                 }
 
                 geothermalPointsLayer.clearLayers(); // Clear previous geothermal points
-                const MAX_SUBPOLYGONS = 30; // Define the threshold as a constant
+                const MAX_SUBPOLYGONS = 200; // Define the threshold as a constant
                 if (polygone.length > MAX_SUBPOLYGONS) {
                     showErrorDialog(
                         `Die Anzahl der resultierenden Teilflächen (${polygone.length}) ist zu hoch. Bitte zeichnen Sie ein kleineres Polygon (max. ${MAX_SUBPOLYGONS} Teilflächen), um den Prozess fortzusetzen.`
