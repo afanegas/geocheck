@@ -144,6 +144,12 @@
             color: #3f3f46;
         }
 
+        /* Placeholder ("max"): explicit colour, contrast 4.8:1 on white instead of the browser's borderline grey */
+        input::placeholder {
+            color: #71717a;
+            opacity: 1;
+        }
+
         /* Custom Scrollbar for Sidebar */
         ::-webkit-scrollbar {
             width: 6px;
@@ -451,13 +457,13 @@
         class="mobile-panel flex-none w-full md:w-[400px] h-[40vh] md:h-full bg-white border-r border-zinc-200 flex flex-col z-[1000] shadow-xl md:shadow-none overflow-hidden relative">
 
         <!-- Header -->
-        <header class="p-6 pb-4 border-b border-zinc-100 flex items-center justify-between shrink-0">
+        <header class="p-4 pb-3 md:p-6 md:pb-4 border-b border-zinc-100 flex items-center justify-between gap-2 shrink-0">
             <div class="flex items-center gap-2">
                 <img src="geo_check_icon.ico" alt="Geo-Check Logo" class="w-8 h-8 rounded-lg object-cover">
-                <h1 id="page-title" class="text-lg font-semibold tracking-tight text-zinc-900">Geo-Check light</h1>
+                <h1 id="page-title" class="text-lg font-semibold tracking-tight text-zinc-900 whitespace-nowrap">Geo-Check light</h1>
             </div>
             <div
-                class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
+                class="shrink-0 text-xs text-zinc-500 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
                 v3.5.1
                 <button type="button" onclick="showChangelog()"
                     class="ml-2 underline hover:text-zinc-700 transition-colors uppercase">Changelog</button>
@@ -471,7 +477,7 @@
             <div id="process-container" class="space-y-3">
                 <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Aktionen</h2>
 
-                <div id="button-container" class="grid grid-cols-[1fr_auto_auto] gap-2">
+                <div id="aktionen-buttons" class="grid grid-cols-[1fr_auto_auto] gap-2">
                     <button id="berechnenButton" onclick="executeFullProcess()"
                         class="h-10 px-4 bg-zinc-900 hover:bg-zinc-800 text-white text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 shadow-sm">
                         <iconify-icon icon="solar:bolt-linear" width="18"></iconify-icon>
@@ -501,21 +507,21 @@
                 <div class="space-y-3">
                     <div class="flex items-center justify-between group">
                         <label for="sondenAbstand" class="text-sm text-zinc-600 font-medium">Sondenabstand <span
-                                class="text-zinc-400 font-normal">[m]</span></label>
+                                class="text-zinc-500 font-normal">[m]</span></label>
                         <input type="text" inputmode="decimal" autocomplete="off" id="sondenAbstand" value="6"
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
 
                     <div class="flex items-center justify-between group">
                         <label for="gebäudeAbstand" class="text-sm text-zinc-600 font-medium">Gebäudeabstand <span
-                                class="text-zinc-400 font-normal">[m]</span></label>
+                                class="text-zinc-500 font-normal">[m]</span></label>
                         <input type="text" inputmode="decimal" autocomplete="off" id="gebäudeAbstand" value="3"
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
 
                     <div class="flex items-center justify-between group">
                         <label for="bäumeAbstand" class="text-sm text-zinc-600 font-medium">Baumabstand <span
-                                class="text-zinc-400 font-normal">[m]</span></label>
+                                class="text-zinc-500 font-normal">[m]</span></label>
                         <div class="flex items-center gap-1.5">
                             <button type="button" id="kronenNutzen" onclick="schalteKrone()" aria-pressed="true"
                                 class="px-2 py-0.5 text-xs rounded border bg-zinc-800 text-white border-zinc-800"
@@ -527,7 +533,7 @@
 
                     <div class="flex items-center justify-between group">
                         <label for="restriktionAbstand" class="text-sm text-zinc-600 font-medium">Abstand zu
-                            Restriktionsflächen <span class="text-zinc-400 font-normal">[m]</span></label>
+                            Restriktionsflächen <span class="text-zinc-500 font-normal">[m]</span></label>
                         <input type="text" inputmode="decimal" autocomplete="off" id="restriktionAbstand" value="0"
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
@@ -536,7 +542,7 @@
 
                     <div class="flex items-center justify-between group">
                         <label for="sondenTiefe" class="text-sm text-zinc-600 font-medium">Sondentiefe <span
-                                class="text-zinc-400 font-normal">[m]</span></label>
+                                class="text-zinc-500 font-normal">[m]</span></label>
                         <div class="flex items-center gap-1.5">
                             <button type="button" id="tiefeMaxBtn" onclick="schalteTiefeMax()" aria-pressed="true"
                                 class="px-2 py-0.5 text-xs rounded border bg-zinc-800 text-white border-zinc-800"
@@ -548,7 +554,7 @@
 
                     <div class="flex items-center justify-between group">
                         <label for="lambdaBoden" class="text-sm text-zinc-600 font-medium truncate pr-4"
-                            title="Wärmeleitfähigkeit des Untergrunds, z. B. aus dem Energieatlas Berlin (wird nach dem Zeichnen unter „Wärmeleitfähigkeit“ angezeigt). Gültigkeitsbereich: 1 bis 4 W/(m·K). Daraus wird die spezifische Entzugsleistung für das ermittelte Sondenfeld berechnet. Weitere Informationen finden Sie über den Hilfe-Button (?).">Wärmeleitfähigkeit <span class="text-zinc-400 font-normal">[W/(m·K)]</span></label>
+                            title="Wärmeleitfähigkeit des Untergrunds, z. B. aus dem Energieatlas Berlin (wird nach dem Zeichnen unter „Wärmeleitfähigkeit“ angezeigt). Gültigkeitsbereich: 1 bis 4 W/(m·K). Daraus wird die spezifische Entzugsleistung für das ermittelte Sondenfeld berechnet. Weitere Informationen finden Sie über den Hilfe-Button (?).">Wärmeleitfähigkeit <span class="text-zinc-500 font-normal">[W/(m·K)]</span></label>
                         <input type="text" inputmode="decimal" autocomplete="off" id="lambdaBoden" value="2,5"
                             title="Wärmeleitfähigkeit des Untergrunds, z. B. aus dem Energieatlas Berlin (wird nach dem Zeichnen unter „Wärmeleitfähigkeit“ angezeigt). Gültigkeitsbereich: 1 bis 4 W/(m·K). Daraus wird die spezifische Entzugsleistung für das ermittelte Sondenfeld berechnet. Weitere Informationen finden Sie über den Hilfe-Button (?)."
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
@@ -556,7 +562,7 @@
 
                     <div class="flex items-center justify-between group">
                         <label for="volllaststunden" class="text-sm text-zinc-600 font-medium truncate pr-4"
-                            title="Jährliche Volllaststunden der Wärmepumpe im Heizbetrieb. 1.800 h/a ist der Standardwert des Geo-Check-Companion (reiner Heizbetrieb), 2.400 h/a entspricht dem Bezug des Energieatlas Berlin (Heizung mit Warmwasser). Mehr Volllaststunden bedeuten mehr Jahresentzug und damit eine geringere spezifische Entzugsleistung.">Volllaststunden <span class="text-zinc-400 font-normal">[h/a]</span></label>
+                            title="Jährliche Volllaststunden der Wärmepumpe im Heizbetrieb. 1.800 h/a ist der Standardwert des Geo-Check-Companion (reiner Heizbetrieb), 2.400 h/a entspricht dem Bezug des Energieatlas Berlin (Heizung mit Warmwasser). Mehr Volllaststunden bedeuten mehr Jahresentzug und damit eine geringere spezifische Entzugsleistung.">Volllaststunden <span class="text-zinc-500 font-normal">[h/a]</span></label>
                         <select id="volllaststunden"
                             title="Jährliche Volllaststunden der Wärmepumpe im Heizbetrieb. 1.800 h/a ist der Standardwert des Geo-Check-Companion (reiner Heizbetrieb), 2.400 h/a entspricht dem Bezug des Energieatlas Berlin (Heizung mit Warmwasser). Mehr Volllaststunden bedeuten mehr Jahresentzug und damit eine geringere spezifische Entzugsleistung."
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
@@ -579,7 +585,7 @@
 
                     <div class="flex items-center justify-between group">
                         <label for="regenerationsgrad" class="text-sm text-zinc-600 font-medium truncate pr-4"
-                            title="Anteil des jährlichen Wärmeentzugs, der dem Erdreich im Sommer wieder zugeführt wird, z. B. aus der Gebäudekühlung oder über Solarthermie. Die Regeneration verringert die langfristige Auskühlung des Erdreichs und erhöht damit die mögliche Entzugsleistung, vor allem bei großen Feldern. 0 % (Standard): keine Regeneration. Gültigkeitsbereich: 0 bis 100 %. Geprüft wird auch, ob das Sondenfeld die eingetragene Wärme aufnehmen kann (Erwärmung der Sole höchstens 15 K im Monatsmittel und 20 K bei Spitzenlast, angenommen 500 Volllaststunden Kühlung und 40 % des Jahreseintrags im stärksten Monat); sonst erscheint ein Hinweis unter den Ergebnissen.">Regenerationsgrad <span class="text-zinc-400 font-normal">[%]</span></label>
+                            title="Anteil des jährlichen Wärmeentzugs, der dem Erdreich im Sommer wieder zugeführt wird, z. B. aus der Gebäudekühlung oder über Solarthermie. Die Regeneration verringert die langfristige Auskühlung des Erdreichs und erhöht damit die mögliche Entzugsleistung, vor allem bei großen Feldern. 0 % (Standard): keine Regeneration. Gültigkeitsbereich: 0 bis 100 %. Geprüft wird auch, ob das Sondenfeld die eingetragene Wärme aufnehmen kann (Erwärmung der Sole höchstens 15 K im Monatsmittel und 20 K bei Spitzenlast, angenommen 500 Volllaststunden Kühlung und 40 % des Jahreseintrags im stärksten Monat); sonst erscheint ein Hinweis unter den Ergebnissen.">Regenerationsgrad <span class="text-zinc-500 font-normal">[%]</span></label>
                         <input type="text" inputmode="decimal" autocomplete="off" id="regenerationsgrad" value="0"
                             title="Anteil des jährlichen Wärmeentzugs, der dem Erdreich im Sommer wieder zugeführt wird, z. B. aus der Gebäudekühlung oder über Solarthermie. Die Regeneration verringert die langfristige Auskühlung des Erdreichs und erhöht damit die mögliche Entzugsleistung, vor allem bei großen Feldern. 0 % (Standard): keine Regeneration. Gültigkeitsbereich: 0 bis 100 %. Geprüft wird auch, ob das Sondenfeld die eingetragene Wärme aufnehmen kann (Erwärmung der Sole höchstens 15 K im Monatsmittel und 20 K bei Spitzenlast, angenommen 500 Volllaststunden Kühlung und 40 % des Jahreseintrags im stärksten Monat); sonst erscheint ein Hinweis unter den Ergebnissen."
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
@@ -596,10 +602,10 @@
 
             <!-- Results -->
             <div id="result-container" class="bg-zinc-50 border border-zinc-200 rounded-lg p-4 space-y-3">
-                <h3 class="text-sm font-semibold text-zinc-900 flex items-center gap-2">
+                <h2 class="text-sm font-semibold text-zinc-900 flex items-center gap-2">
                     <iconify-icon icon="solar:chart-linear" width="16"></iconify-icon>
                     Ergebnisse
-                </h3>
+                </h2>
                 <div id="veraltetHinweis" role="status"
                     class="hidden text-xs leading-relaxed text-red-700 bg-red-50 border border-red-200 rounded px-3 py-2">
                     Abstände geändert: Die rot markierten Werte gelten noch für das bisherige Sondenfeld.
@@ -674,43 +680,43 @@
             <!-- Export -->
             <div id="export-container" class="pt-2">
                 <h2 class="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">Export</h2>
-                <div id="button-container" class="grid grid-cols-5 gap-2">
+                <div id="export-buttons" class="grid grid-cols-3 gap-2">
                     <button id="pdfButton"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group">
                         <iconify-icon icon="solar:printer-linear" width="24"
-                            class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
-                        <span class="text-[10px] font-medium">PDF</span>
+                            class="mb-1 text-zinc-500 group-hover:text-zinc-900 transition-colors"></iconify-icon>
+                        <span class="text-xs font-medium">PDF</span>
                     </button>
 
                     <button id="pngButton" title="Ergebnis als Bild (PNG) für Berichte"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group disabled:opacity-50">
                         <iconify-icon icon="solar:gallery-linear" width="24"
-                            class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
-                        <span class="text-[10px] font-medium">PNG</span>
+                            class="mb-1 text-zinc-500 group-hover:text-zinc-900 transition-colors"></iconify-icon>
+                        <span class="text-xs font-medium">PNG</span>
                     </button>
 
                     <button id="importButton" onclick="triggerImport()"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group"
                         title="GeoJSON Import">
                         <iconify-icon icon="solar:file-send-linear" width="24"
-                            class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
-                        <span class="text-[10px] font-medium">Import</span>
+                            class="mb-1 text-zinc-500 group-hover:text-zinc-900 transition-colors"></iconify-icon>
+                        <span class="text-xs font-medium">Import</span>
                     </button>
 
                     <button id="exportGeoJSONButton" onclick="exportGEOJSON()"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group"
                         title="GeoJSON Export">
                         <iconify-icon icon="solar:file-download-linear" width="24"
-                            class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
-                        <span class="text-[10px] font-medium">Export</span>
+                            class="mb-1 text-zinc-500 group-hover:text-zinc-900 transition-colors"></iconify-icon>
+                        <span class="text-xs font-medium">Export</span>
                     </button>
 
                     <button id="companionButton" onclick="window.open('https://geocheck.dieffie.de/', '_blank')"
                         class="col-span-1 h-16 flex flex-col items-center justify-center bg-white border border-zinc-200 hover:border-zinc-400 hover:shadow-sm text-zinc-600 rounded-lg transition-all group"
                         title="Geo‑Check‑Companion starten">
                         <iconify-icon icon="solar:smart-home-angle-linear" width="24"
-                            class="mb-1 text-zinc-400 group-hover:text-zinc-900 transition-colors"></iconify-icon>
-                        <span class="text-[10px] font-medium">Companion</span>
+                            class="mb-1 text-zinc-500 group-hover:text-zinc-900 transition-colors"></iconify-icon>
+                        <span class="text-xs font-medium">Companion</span>
                     </button>
                     <input type="file" id="importInput" accept=".geojson,.json,application/geo+json,application/json" class="hidden"
                         onchange="importGEOJSON(event)">
@@ -719,11 +725,11 @@
 
             <!-- Debug Trigger -->
             <div id="debug-header" onclick="toggleDebugLog()"
-                class="text-[10px] text-zinc-400 text-center cursor-pointer hover:text-zinc-600 transition-colors mt-4">
+                class="text-xs text-zinc-500 text-center cursor-pointer hover:text-zinc-700 transition-colors mt-4">
                 Debug-Log anzeigen
             </div>
             <div id="debug-header2" onclick="toggleDebug()"
-                class="text-[10px] text-zinc-400 text-center cursor-pointer hover:text-zinc-600 transition-colors mt-2">
+                class="text-xs text-zinc-500 text-center cursor-pointer hover:text-zinc-700 transition-colors mt-2">
                 Debug-Funktionen anzeigen
             </div>
 
@@ -734,7 +740,7 @@
             </div>
 
             <div id="debug-container" class="hidden flex-wrap gap-2 mt-2">
-                <div id="button-container" class="flex flex-wrap gap-2">
+                <div id="debug-buttons" class="flex flex-wrap gap-2">
                     <button onclick="loadBuildings()" class="bg-zinc-200 text-xs px-2 py-1 rounded">Load
                         Buildings</button>
                     <button onclick="loadTrees()" class="bg-zinc-200 text-xs px-2 py-1 rounded">Load Trees</button>
@@ -784,22 +790,22 @@
 
         <!-- Absolute positioned legends (controlled by JS display property, but styled here) -->
         <div id="legend" class="absolute bottom-8 right-4 z-[999] hidden">
-            <p id="legend-title" class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
+            <p class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
                 Entzugsleistung (100m, 2400h/a)</p>
             <img src="https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?SERVICE=WMS&amp;REQUEST=GetLegendGraphic&amp;VERSION=1.1.1&amp;LAYER=lb_geopot_2400100_fl&amp;FORMAT=image/png"
-                alt="Legende" class="max-w-full h-auto rounded">
+                alt="Legende: Entzugsleistung (100 m, 2400 h/a)" class="max-w-full h-auto rounded">
         </div>
         <div id="legend-warmeleitfahigkeit" class="absolute bottom-8 right-4 z-[999] hidden">
-            <p id="legend-title" class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
+            <p class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
                 Wärmeleitfähigkeit (100m)</p>
             <img src="https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?SERVICE=WMS&amp;REQUEST=GetLegendGraphic&amp;VERSION=1.1.1&amp;LAYER=db_geopot_wlf100_fl&amp;FORMAT=image/png"
-                alt="Legende" class="max-w-full h-auto rounded">
+                alt="Legende: Wärmeleitfähigkeit (100 m)" class="max-w-full h-auto rounded">
         </div>
         <div id="legend-rupelton" class="absolute bottom-8 right-4 z-[999] hidden">
-            <p id="legend-title" class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
+            <p class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
                 Wasserbehördlicher Vollzug</p>
             <img src="https://gdi.berlin.de/services/wms/geologie_rupelton?SERVICE=WMS&amp;REQUEST=GetLegendGraphic&amp;VERSION=1.1.1&amp;LAYER=b_geologie_rupelton_fl&amp;FORMAT=image/png"
-                alt="Legende" class="max-w-full h-auto rounded">
+                alt="Legende: wasserbehördlicher Vollzug" class="max-w-full h-auto rounded">
         </div>
 
         <!-- Loading Overlay -->
@@ -874,31 +880,31 @@
         const helpText = `
   <div class="text-left space-y-4">
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">🛠️ Polygon zur Berechnung des Sondenfelds zeichnen</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">🛠️ Polygon zur Berechnung des Sondenfelds zeichnen</h3>
         <p class="text-sm text-zinc-600">Zeichnen Sie zunächst ein Polygon. Verwenden Sie dazu das dunkle Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>) links auf der Karte; oben ist „Sondenfeld“ voreingestellt. Klicken Sie auf die Karte, um die Eckpunkte zu setzen. Schließen Sie das Polygon, indem Sie auf den ersten Punkt zurückklicken. Danach klicken Sie auf „Berechnen", um die Berechnung zu starten.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">🌳 Restriktionsflächen</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">🌳 Restriktionsflächen</h3>
         <p class="text-sm text-zinc-600">Gebäude und Bäume werden automatisch berücksichtigt. Zusätzlich können Sie eigene Restriktionsflächen definieren: Wählen Sie oben auf der Karte „Restriktionsfläche“ aus und nutzen Sie anschließend das Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>), um die Fläche einzuzeichnen. Bäume, die nicht in der Basiskarte enthalten sind, können Sie über „Baum“ oben auf der Karte als grüne Punkte ergänzen; für sie gilt der eingestellte Baumabstand.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">🗺️ Weitere Kartenansichten auswählen</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">🗺️ Weitere Kartenansichten auswählen</h3>
         <p class="text-sm text-zinc-600">Klicken Sie auf den Button mit dem Kartensymbol (<iconify-icon icon="solar:layers-minimalistic-linear" inline></iconify-icon>), um folgende Kartenansichten auszuwählen: Satellitenbilder, Informationen zum wasserbehördlichen Vollzug, geothermisches Potenzial, Wärmeleitfähigkeit und Grundstücksgrenzen.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">🔄 Zurücksetzen der Karte</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">🔄 Zurücksetzen der Karte</h3>
         <p class="text-sm text-zinc-600">Mit dem Reset-Button (<iconify-icon icon="solar:restart-linear" inline></iconify-icon>) werden alle Zeichnungen und Flächen auf der Karte gelöscht. Die Eingabeparameter bleiben dabei unverändert erhalten.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">📤 Ergebnisse importieren & exportieren</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">📤 Ergebnisse importieren & exportieren</h3>
         <p class="text-sm text-zinc-600">Am Ende der Seite können Sie die Ergebnisse als PDF oder GeoJSON (für GIS-Software oder Geo-Check-Companion) herunterladen. Zusätzlich können Sie GeoJSON‑Dateien importieren, die zuvor mit Geo‑Check erzeugt wurden, um Polygone wieder zu verwenden. Einen Screenshot der Karte laden Sie mit dem Button (<iconify-icon icon="solar:camera-linear" inline></iconify-icon>) herunter.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">📉 Hinweis zur Berechnung</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">📉 Hinweis zur Berechnung</h3>
         <p class="text-sm text-zinc-600 leading-relaxed">Die Berechnung dient als grobe Abschätzung des geothermischen Potenzials. Aus der eingegebenen Wärmeleitfähigkeit des Untergrunds (z. B. aus dem Energieatlas Berlin) wird die maximale spezifische Entzugsleistung des ermittelten Sondenfelds berechnet – mit dem gleichen Verfahren wie im Geo-Check-Companion (vereinfachte Lastzerlegung nach GEO-HANDlight, Temperaturgrenzen nach VDI 4640). Die gegenseitige thermische Beeinflussung der Sonden wird über den g-Funktionswert des Felds berücksichtigt, der von Sondenanzahl, Sondenabstand und Sondentiefe abhängt. Er ist für kompakte, versetzt angeordnete Sondenfelder vorberechnet (bis 378 Sonden, 6–12 m Abstand, 40–400 m Tiefe) und gilt für Wärmeleitfähigkeiten von 1 bis 4 W/(m·K). Liegt eine Eingabe außerhalb, wird mit dem nächstgelegenen gültigen Wert gerechnet (bei mehr als 378 Sonden extrapoliert) und unter den Ergebnissen ein Hinweis angezeigt. Lang gestreckte oder aufgelockerte Felder beeinflussen sich weniger, das Ergebnis liegt dann auf der sicheren Seite. Jährlicher Wärmeentzug und jährliche Heizwärme sind die Entzugs- bzw. Heizleistung mal Volllaststunden: Höchstwerte, die das Sondenfeld unter den Temperaturgrenzen liefern kann, nicht der Bedarf des Gebäudes; die Heizwärme enthält zusätzlich den Strom der Wärmepumpe (über den COP). Der Regenerationsgrad gibt an, welcher Anteil des jährlichen Wärmeentzugs dem Erdreich im Sommer wieder zugeführt wird (z. B. aus der Gebäudekühlung); das verringert die langfristige Auskühlung und erhöht die Entzugsleistung, vor allem bei großen Feldern. Ob das Sondenfeld diese Wärme aufnehmen kann, wird mit festen Annahmen geprüft (500 Volllaststunden Kühlung, 40 % des Jahreseintrags im stärksten Monat; Erwärmung der Sole höchstens 15 K im Monatsmittel und 20 K bei Spitzenlast nach VDI 4640); ist das nicht der Fall, erscheint ein Hinweis. Der Auslegungszeitraum legt fest, für welche Betriebsdauer die gegenseitige Abkühlung der Sonden angesetzt wird: „25 Jahre“ (Standard) und „50 Jahre“ rechnen mit dem Zustand nach dieser Betriebsdauer; „Langfristig“ rechnet mit dem Endzustand, in dem das Erdreich nicht weiter auskühlt (wie GEO-HANDlight). Er wird je nach Tiefe und Untergrund erst nach Jahrzehnten bis Jahrhunderten erreicht und ergibt vor allem bei großen Feldern deutlich niedrigere Werte. Feste Annahmen: Im Monat mit dem größten Wärmebedarf (meist Januar) werden 16 % des jährlichen Wärmeentzugs entnommen; mittlere Oberflächentemperatur 11 °C; geothermischer Wärmestrom aus der Tiefe 0,065 W/m²; volumetrische Wärmekapazität des Untergrunds (Erdreich) 2,18 MJ/(m³·K); Bohrlochwiderstand 0,1 m·K/W; Bohrlochradius 75 mm; die Sole kommt 4 K kälter aus der Wärmepumpe zurück, als sie aus der Sonde kommt (Spreizung). Für eine detailliertere Berechnung mit der tatsächlichen Feldgeometrie und eigenen Annahmen können Sie den Geo-Check-Companion verwenden.</p>
     </div>
     <div class="space-y-1">
-        <h4 class="font-bold text-zinc-900 flex items-center gap-2">🏠 Geo-Check-Companion</h4>
+        <h3 class="font-bold text-zinc-900 flex items-center gap-2">🏠 Geo-Check-Companion</h3>
         <p class="text-sm text-zinc-600">Mit dem Geo-Check-Companion können Sie eine detailliertere Berechnung der Wärmeentzugsleistung durchführen. Exportieren Sie dazu zunächst das GeoJSON und klicken Sie anschließend auf den Button mit dem Haus-Symbol (<iconify-icon icon="solar:smart-home-angle-linear" inline></iconify-icon>), um die erweiterte Berechnungsplattform zu öffnen.</p>
     </div>
   </div>
