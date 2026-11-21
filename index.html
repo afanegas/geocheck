@@ -680,7 +680,7 @@
 
                 <div class="space-y-2 pt-2 mt-2 border-t border-zinc-200">
                     <p id="geothermischesPotenzial" class="text-xs leading-relaxed text-zinc-500"
-                        title="Die spezifische Entzugsleistung laut Energieatlas Berlin gilt für 2 Sonden à 100 m bei 2.400 Betriebsstunden pro Jahr (Heizung mit Warmwasser) und dient nur zum Vergleich. Für denselben Bezug oben 2.400 Volllaststunden wählen. Die maximale Sondentiefe können Sie für eine neue Berechnungsiteration verwenden.">
+                        title="Die spezifische Entzugsleistung laut Energieatlas Berlin gilt für 2 Sonden à 100 m bei den gewählten Volllaststunden (1.800 h/a: reiner Heizbetrieb, 2.400 h/a: Heizung mit Warmwasser) und dient nur zum Vergleich mit einer kleinen Anlage. Die maximale Sondentiefe können Sie für eine neue Berechnungsiteration verwenden.">
                         <span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span>
                         -
                     </p>
@@ -1798,15 +1798,15 @@
             if (pruefung.ok) return [];
             const zahl = (x) => x.toLocaleString('de-DE', { maximumFractionDigits: 1 });
             const grenzeProzent = Number.isFinite(grenze) ? Math.floor(grenze * 100 / 5 + 1e-9) * 5 : NaN;
+            const realistischer = 'Bei normaler Gebäudekühlung ist ein geringerer Regenerationsgrad realistischer';
             const grenzSatz = grenzeProzent > 0
-                ? `Die Grenzen sind bis etwa ${grenzeProzent} % Regeneration eingehalten. `
-                : 'Wählen Sie einen niedrigeren Regenerationsgrad. ';
-            return [`Bei ${zahl(r * 100)} % Regeneration wird dem Erdreich im Sommer sehr viel Wärme zugeführt. ` +
-                'Das Sondenfeld kann diese Wärme bei einer üblichen Gebäudekühlung nicht aufnehmen: ' +
-                'Der Eintrag fällt dort an wenigen heißen Tagen an und erwärmt die Sole zu stark. ' +
-                'Die angezeigte Entzugsleistung ist deshalb in diesem Fall zu hoch. ' +
-                'Eine hohe Regeneration funktioniert nur, wenn die Wärme gleichmäßig über viele Monate eingetragen wird, ' +
-                'zum Beispiel mit Solarthermie. Bei einer normalen Gebäudekühlung ist ein geringerer Regenerationsgrad realistisch. ' +
+                ? `${realistischer}: Bis etwa ${grenzeProzent} % Regeneration werden die Temperaturgrenzen eingehalten. `
+                : `${realistischer}. Wählen Sie einen niedrigeren Regenerationsgrad. `;
+            return [`Bei ${zahl(r * 100)} % Regeneration mit einer üblichen Gebäudekühlung muss dem Erdreich im Sommer sehr viel Wärme zugeführt werden. ` +
+                'Diese Wärme fällt an wenigen heißen Tagen an, und die Sole wird dabei zu warm. ' +
+                'Eine so hohe Regeneration funktioniert nur, wenn die Wärme gleichmäßig über viele Monate eingetragen wird, ' +
+                'zum Beispiel mit Solarthermie. ' +
+                'Die angezeigte Entzugsleistung ist deshalb zu hoch. ' +
                 grenzSatz +
                 'Für eine genauere Rechnung mit eigenen Annahmen nutzen Sie den Geo-Check-Companion.'];
         }
@@ -2443,11 +2443,81 @@
         //Funktion zum lesen des Potenzials in Geoportal
         // rupelton: result of prefetchRupelton() for the drawn area; without it the
         // data is fetched here for the borehole alone (as before the prefetch).
+        // POTENZIAL_BEGIN
+        // Spezifische Entzugsleistung laut Energieatlas Berlin: Ebenen des Geodienstes für 2 Sonden à 100 m,
+        // je Volllaststunden (h/a). Die Antwort enthält auch die Einschränkungen (restrikt_*), in beiden
+        // Ebenen gleich. DOM-frei, damit tests/test_geocheck_app_potenzial.py den Block mit Node prüfen kann.
+        const POTENZIAL_WMS_URL = "https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?";
+        const POTENZIAL_EBENEN = { 1800: "hb_geopot_1800100_fl", 2400: "lb_geopot_2400100_fl" };
+        const POTENZIAL_KEINE_RESTRIKTION = { name: "Erdwärmenutzung grundsätzlich erlaubt", color: "text-green-600" };
+        const POTENZIAL_RESTRIKTIONEN = {
+            "restrikt_wsg": { name: "Erdwärmenutzung nicht erlaubt in Wasserschutzgebieten", color: "text-red-600" },
+            "restrikt_gwl2": { name: "Einschränkungen (Salzkonzentration oberhalb Rupelton)", color: "text-orange-600" },
+            "restrikt_gwl34": { name: "Einschränkungen (Salzkonzentration unterhalb Rupelton)", color: "text-orange-600" },
+            "restrikt_gespanntes": { name: "Einschränkungen (artesisch gespanntes Grundwasser)", color: "text-orange-600" },
+            "restrikt_rupelton": { name: "Einschränkungen (Rupeltonhochlagen)", color: "text-orange-600" }
+        };
+
+        function potenzialAbfrageUrl(ebene, lng, lat) {
+            return `${POTENZIAL_WMS_URL}SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo&QUERY_LAYERS=${ebene}&LAYERS=${ebene}` +
+                `&STYLES=&INFO_FORMAT=text/xml&SRS=EPSG:4326&X=50&Y=50&WIDTH=101&HEIGHT=101` +
+                `&BBOX=${lng - 0.0005},${lat - 0.0005},${lng + 0.0005},${lat + 0.0005}`;
+        }
+
+        // Antwort des Geodienstes (XML-Text): { entzug: Klasse wie "> 30 - 35" oder "Gewässer" (sonst null),
+        // restriktion: Eintrag aus POTENZIAL_RESTRIKTIONEN (der letzte genannte) oder null }.
+        function potenzialAusXml(text) {
+            const entities = { "&gt;": ">", "&lt;": "<", "&amp;": "&", "&quot;": "\"", "&apos;": "'" };
+            const entzugMatch = /<ua_geothermisches_potenzial:entzug>([^<]*)<\/ua_geothermisches_potenzial:entzug>/.exec(text);
+            const entzug = entzugMatch ? entzugMatch[1].replace(/&(gt|lt|amp|quot|apos);/g, (m) => entities[m]).trim() : null;
+            let restriktion = null;
+            const re = /<ua_geothermisches_potenzial:(restrikt_\w+)>([^<]*)</g;
+            let m;
+            while ((m = re.exec(text)) !== null) {
+                if (POTENZIAL_RESTRIKTIONEN[m[1]] && m[2].trim() === "vorhanden") restriktion = POTENZIAL_RESTRIKTIONEN[m[1]];
+            }
+            return { entzug: entzug || null, restriktion: restriktion };
+        }
+
+        // Zeile unter "Potenzial": die Klasse mit Einheit; Wasserflächen nur als "Gewässer".
+        function potenzialZeile(entzug, stunden) {
+            const wert = /\d/.test(entzug) ? `${entzug} W/m` : entzug;
+            return `Spezifische Entzugsleistung laut Energieatlas Berlin (2 Sonden à 100 m, ${stunden} h/a): ${wert}`;
+        }
+        // POTENZIAL_END
+
+        // Ergebnis der letzten Abfrage: { entzug: { 1800: ..., 2400: ... }, restriction, rupeltonTyp } oder null.
+        let potenzialZustand = null;
+
+        // Zeigt das Potenzial für die gewählten Volllaststunden (ohne neue Abfrage).
+        function zeigePotenzial() {
+            const resultElement = document.getElementById("geothermischesPotenzial");
+            if (!potenzialZustand || !resultElement) return;
+            const stunden = parseInt(document.getElementById("volllaststunden").value, 10);
+            const { restriction, rupeltonTyp } = potenzialZustand;
+            const entzug = potenzialZustand.entzug[stunden];
+            const kopf = `<span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span>`;
+            if (entzug) {
+                let text = kopf + `- ${restriction.name}.<br>`;
+                if (rupeltonTyp) text += `- Auflage: ${rupeltonTyp}<br>`;
+                text += `- ${potenzialZeile(entzug, stunden)}`;
+                resultElement.innerHTML = text;
+                resultElement.className = `text-xs leading-relaxed ${restriction.color}`;
+            } else if (restriction.name !== POTENZIAL_KEINE_RESTRIKTION.name) {
+                resultElement.innerHTML = kopf + `- ${restriction.name}.<br>- Auflage: ${rupeltonTyp || "Keine weiteren Angaben"}`;
+                resultElement.className = `text-xs leading-relaxed ${restriction.color}`;
+            } else {
+                resultElement.innerHTML = kopf + ` Keine Daten.`;
+                resultElement.className = "text-xs leading-relaxed text-zinc-500";
+            }
+        }
+
         function checkPotenzial(rupelton) {
             return new Promise((resolve, reject) => {
                 try {
                     addDebugLog("Starte Überprüfung des geothermischen Potenzials...");
                     exportAuflagen = '';
+                    potenzialZustand = null;
                     const resultElement = document.getElementById("geothermischesPotenzial");
 
                     if (!geothermalPointsLayer || geothermalPointsLayer.getLayers().length === 0) {
@@ -2534,64 +2604,34 @@
                         })
                         .catch(e => addDebugLog("Fehler Rupelton Typ: " + e.message));
 
-                    // 3. WMS Query for Potential
-                    const wmsUrl = "https://gdi.berlin.de/services/wms/ua_geothermisches_potenzial?";
-                    const layerName = "lb_geopot_2400100_fl";
-                    const wmsQueryUrl = `${wmsUrl}SERVICE=WMS&VERSION=1.1.1&REQUEST=GetFeatureInfo&QUERY_LAYERS=${layerName}&LAYERS=${layerName}&STYLES=&INFO_FORMAT=text/xml&SRS=EPSG:4326&X=50&Y=50&WIDTH=101&HEIGHT=101&BBOX=${lng - 0.0005},${lat - 0.0005},${lng + 0.0005},${lat + 0.0005}`;
-                    let entzug = null;
-                    let restriction = { name: "Erdwärmenutzung grundsätzlich erlaubt", color: "text-green-600" };
+                    // 3. WMS Query for Potential: both full-load hours (1800 and 2400 h/a), the page then
+                    // shows the one chosen under "Volllaststunden". The restriction flags are the same in both.
+                    let restriction = POTENZIAL_KEINE_RESTRIKTION;
+                    const entzugNachStunden = {};
 
-                    const p2 = fetchWithRetry(wmsQueryUrl)
-                        .then(response => response.text())
-                        .then(text => {
-                            const parser = new DOMParser();
-                            const xmlDoc = parser.parseFromString(text, "text/xml");
-                            const interestingAttributes = {
-                                "ua_geothermisches_potenzial:restrikt_wsg": { name: "Erdwärmenutzung nicht erlaubt in Wasserschutzgebieten", color: "text-red-600" },
-                                "ua_geothermisches_potenzial:restrikt_gwl2": { name: "Einschränkungen (Salzkonzentration oberhalb Rupelton)", color: "text-orange-600" },
-                                "ua_geothermisches_potenzial:restrikt_gwl34": { name: "Einschränkungen (Salzkonzentration unterhalb Rupelton)", color: "text-orange-600" },
-                                "ua_geothermisches_potenzial:restrikt_gespanntes": { name: "Einschränkungen (artesisch gespanntes Grundwasser)", color: "text-orange-600" },
-                                "ua_geothermisches_potenzial:restrikt_rupelton": { name: "Einschränkungen (Rupeltonhochlagen)", color: "text-orange-600" },
-                            };
-                            const featureMembers = xmlDoc.getElementsByTagName("gml:featureMember");
-                            if (featureMembers.length > 0) {
-                                Array.from(featureMembers).forEach((feature) => {
-                                    Array.from(feature.getElementsByTagName("*")).forEach((attr) => {
-                                        if (attr.tagName === "ua_geothermisches_potenzial:entzug") { entzug = attr.textContent.trim(); }
-                                        else if (interestingAttributes[attr.tagName] && attr.textContent.trim() === "vorhanden") { restriction = interestingAttributes[attr.tagName]; }
-                                    });
-                                });
-                            }
-                        })
-                        .catch(error => { addDebugLog(`Fehler WMS Potential: ${error.message}`); });
+                    const p2 = Promise.all(Object.keys(POTENZIAL_EBENEN).map((stunden) =>
+                        fetchWithRetry(potenzialAbfrageUrl(POTENZIAL_EBENEN[stunden], lng, lat))
+                            .then(response => response.text())
+                            .then(text => {
+                                const ergebnis = potenzialAusXml(text);
+                                entzugNachStunden[stunden] = ergebnis.entzug;
+                                if (ergebnis.restriktion && restriction === POTENZIAL_KEINE_RESTRIKTION) restriction = ergebnis.restriktion;
+                            })
+                            .catch(error => { addDebugLog(`Fehler WMS Potential (${stunden} h/a): ${error.message}`); })
+                    ));
 
                     Promise.all([p1, p2, p3]).then(() => {
                         setzeAutoTiefe(autoTiefeAusRupelton(rupeltonDepth, bboxIntersectsBerlin([lat, lng, lat, lng])));
                         updateResultsWithoutColorReset();
                         const auflageTeile = [];
-                        if (restriction.name !== "Erdwärmenutzung grundsätzlich erlaubt") auflageTeile.push(restriction.name);
+                        if (restriction.name !== POTENZIAL_KEINE_RESTRIKTION.name) auflageTeile.push(restriction.name);
                         if (rupeltonTyp) auflageTeile.push(rupeltonTyp);
                         exportAuflagen = auflageTeile.map(t => t.replace(/[.\s]+$/, '')).join('. ');
                         const depthElement = document.getElementById("tiefenrestriktion");
                         if (depthElement) depthElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton [m]</span> ${rupeltonDepth}`;
 
-                        if (entzug) {
-                            let displayString = `<span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span>`;
-                            displayString += `- ${restriction.name}.<br>`;
-                            if (rupeltonTyp) displayString += `- Auflage: ${rupeltonTyp}<br>`;
-                            displayString += `- Spezifische Entzugsleistung laut Energieatlas Berlin: ${entzug} W/m`;
-                            resultElement.innerHTML = displayString;
-                            resultElement.className = `text-xs leading-relaxed ${restriction.color}`;
-                        } else if (restriction.name !== "Erdwärmenutzung grundsätzlich erlaubt") {
-                            let displayString = `<span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span>`;
-                            displayString += `- ${restriction.name}.<br>`;
-                            displayString += `- Auflage: ${rupeltonTyp || "Keine weiteren Angaben"}`;
-                            resultElement.innerHTML = displayString;
-                            resultElement.className = `text-xs leading-relaxed ${restriction.color}`;
-                        } else {
-                            resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span> Keine Daten.`;
-                            resultElement.className = "text-xs leading-relaxed text-zinc-500";
-                        }
+                        potenzialZustand = { entzug: entzugNachStunden, restriction: restriction, rupeltonTyp: rupeltonTyp };
+                        zeigePotenzial();
                         resolve();
                     }).catch(() => resolve());
                 } catch (error) { addDebugLog(`Fehler checkPotenzial: ${error.message}`); resolve(); }
@@ -4154,6 +4194,7 @@
             exportAuflagen = '';
             setzeErgebnisseLeer();
 
+            potenzialZustand = null;
             const potenzialElement = document.getElementById("geothermischesPotenzial");
             potenzialElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Potenzial</span> -`;
             potenzialElement.className = "text-xs leading-relaxed text-zinc-500";
@@ -4363,6 +4404,8 @@
             if (tiefeModus !== 'manuell') { tiefeModus = 'manuell'; zeigeTiefe(); }
         });
         zeigeTiefe();
+        // The Energieatlas value follows the chosen full-load hours (both were fetched with the calculation).
+        document.getElementById('volllaststunden').addEventListener('input', zeigePotenzial);
         const relevantFields = ['lambdaBoden', 'volllaststunden', 'auslegungszeitraum', 'regenerationsgrad', 'sondenTiefe', 'copWärmepumpe'];
         relevantFields.forEach(fieldId => {
             const input = document.getElementById(fieldId);
