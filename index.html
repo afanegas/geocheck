@@ -690,7 +690,7 @@
                         -
                     </p>
                     <p id="tiefenrestriktion" class="text-xs leading-relaxed text-zinc-500">
-                        <span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton [m]</span>
+                        <span class="font-semibold text-zinc-700 block mb-0.5">Zulässige Bohrtiefe [m]</span>
                         -
                     </p>
                 </div>
@@ -847,7 +847,7 @@
 - Einheitliche Titel in den Ergebnisfeldern; die Wärmeleitfähigkeit nennt „bis 100 m“.
 - COP nur noch größer 1.
 - Verständlicher Hinweis bei zu hoher Regeneration, mit höchstem zulässigem Regenerationsgrad.
-- Verbesserungen in der Oberfläche.
+- PNG und PDF überarbeitet: Projektname optional, Vergleich Regeneration abwählbar.
 
 ## Version 3.5.0 (20.11.2026)
 
@@ -2479,10 +2479,14 @@
             return { entzug: entzug || null, restriktion: restriktion };
         }
 
-        // Zeile unter "Potenzial": die Klasse mit Einheit; Wasserflächen nur als "Gewässer".
+        // Die Klasse mit Einheit; Wasserflächen nur als "Gewässer".
+        function potenzialWert(entzug) {
+            return /\d/.test(entzug) ? `${entzug} W/m` : entzug;
+        }
+
+        // Zeile unter "Potenzial".
         function potenzialZeile(entzug, stunden) {
-            const wert = /\d/.test(entzug) ? `${entzug} W/m` : entzug;
-            return `Spezifische Entzugsleistung laut Energieatlas Berlin (2 Sonden à 100 m, ${stunden} h/a): ${wert}`;
+            return `Spezifische Entzugsleistung laut Energieatlas Berlin (2 Sonden à 100 m, ${stunden} h/a): ${potenzialWert(entzug)}`;
         }
         // POTENZIAL_END
 
@@ -2628,7 +2632,7 @@
                         if (rupeltonTyp) auflageTeile.push(rupeltonTyp);
                         exportAuflagen = auflageTeile.map(t => t.replace(/[.\s]+$/, '')).join('. ');
                         const depthElement = document.getElementById("tiefenrestriktion");
-                        if (depthElement) depthElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton [m]</span> ${rupeltonDepth}`;
+                        if (depthElement) depthElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Zulässige Bohrtiefe [m]</span> ${rupeltonDepth}`;
 
                         potenzialZustand = { entzug: entzugNachStunden, restriction: restriction, rupeltonTyp: rupeltonTyp };
                         zeigePotenzial();
@@ -3491,29 +3495,14 @@
         ///-------
         //Funktion Export als PDF
         ///-------
-        function exportResultsToPDF() {
+        function exportResultsToPDF(opt) {
             // Check if probes were generated
             const sondenCount = geothermalPointsLayer.getLayers().length;
             if (sondenCount === 0) {
                 showErrorDialog("Es wurden keine Sonden ermittelt. Bitte klicken Sie auf 'Berechnen' und versuchen Sie es erneut.");
                 return;
             }
-            const { jsPDF } = window.jspdf;
-            const pdf = new jsPDF({ format: "a4" }); // A4 format
-            const titleBackgroundColor = "#18181b"; // Zinc-900
-            const titleTextColor = "#FFFFFF"; // White text for title
-            const sectionTitleColor = "#333333"; // Dark gray for section titles
-            const lineColor = "#CCCCCC"; // Light gray for lines
-            let currentY = 10; // Start Y position for content  
-            // Header section
-            pdf.setFillColor(titleBackgroundColor);
-            pdf.rect(0, currentY, 210, 15, "F");
-            pdf.setFont("helvetica", "bold");
-            pdf.setFontSize(16);
-            pdf.setTextColor(titleTextColor);
-            pdf.text("Geo-Check light", 10, currentY + 10);
-            currentY += 20;
-            // Step 1: Focus map on user polygons (no animation, otherwise the
+            // Focus map on user polygons (no animation, otherwise the
             // screenshot is taken while the map is still moving)
             let polygonBounds = new L.LatLngBounds();
             drawnItems.eachLayer((layer) => {
@@ -3524,7 +3513,6 @@
             if (polygonBounds.isValid()) {
                 map.fitBounds(polygonBounds, { animate: false });
             }
-            // Step 2: Add map screenshot to PDF
             const withTimeout = (promise, ms) => Promise.race([
                 promise,
                 new Promise((_, reject) => setTimeout(() => reject(new Error("Zeitüberschreitung")), ms)),
@@ -3546,160 +3534,10 @@
                     return null;
                 })
                 .then((img) => {
-                    {
-                        let mapMissing = true;
-                        try {
-                        if (img && img.width > 0 && img.height > 0) {
-                        const pdfWidth = 190;
-                        let imgWidth = pdfWidth;
-                        let imgHeight = (img.height / img.width) * imgWidth;
-                        if (imgHeight > 100) {
-                            imgHeight = 100;
-                            imgWidth = (img.width / img.height) * imgHeight;
-                        }
-                        pdf.addImage(img, "PNG", 10, currentY, imgWidth, imgHeight);
-                        currentY += imgHeight + 10;
-                        mapMissing = false;
-                        }
-                        } catch (error) {
-                            addDebugLog("Fehler beim Einfügen der Karte: " + error.message);
-                        }
-                        if (mapMissing) {
-                            pdf.setFont("helvetica", "italic");
-                            pdf.setFontSize(9);
-                            pdf.setTextColor("#B45309");
-                            pdf.text("Die Karte konnte in diesem Browser nicht in das PDF übernommen werden.", 10, currentY + 5);
-                            currentY += 15;
-                        }
-                        {
-                        // Divider line
-                        pdf.setDrawColor(lineColor);
-                        pdf.line(10, currentY, 200, currentY);
-                        currentY += 5;
-                        // Add parameters
-                        pdf.setFont("helvetica", "bold");
-                        pdf.setFontSize(10);
-                        pdf.setTextColor(sectionTitleColor);
-                        pdf.text("Berechnungsparameter:", 10, currentY);
-                        currentY += 1;
-                        pdf.setFont("helvetica", "normal");
-                        pdf.setFontSize(10);
-                        const params = [
-                            `Abstand zwischen Sonden: ${document.getElementById("sondenAbstand").value} m`,
-                            `Abstand zu Gebäuden: ${document.getElementById("gebäudeAbstand").value} m`,
-                            `Abstand zu Bäumen: ${document.getElementById("bäumeAbstand").value} m` + (kronenAn() ? ' (mit Kronenradius, wenn vorhanden)' : ''),
-                            `Abstand zu Restriktionsflächen: ${document.getElementById("restriktionAbstand").value} m`,
-                            `Sondentiefe: ${document.getElementById("sondenTiefe").value} m (${tiefeHerkunft()})`,
-                            `Wärmeleitfähigkeit: ${document.getElementById("lambdaBoden").value} W/(m·K)`,
-                            `Volllaststunden: ${document.getElementById("volllaststunden").value} h/a`,
-                            `Auslegungszeitraum: ${document.getElementById("auslegungszeitraum").selectedOptions[0].text}`,
-                            `Regenerationsgrad: ${(getParameterValues().regeneration * 100).toLocaleString('de-DE', { maximumFractionDigits: 2 })} %`,
-                            `COP Wärmepumpe: ${document.getElementById("copWärmepumpe").value}`,
-                        ];
-                        params.forEach((param, index) => {
-                            pdf.text(param, 10, currentY + (index + 1) * 6);
-                        });
-                        currentY += params.length * 6 + 8;
-
-                        // Divider line
-                        pdf.setDrawColor(lineColor);
-                        pdf.line(10, currentY, 200, currentY);
-                        currentY += 5;
-                        // Ergebnisse hinzufügen
-                        pdf.setFont("helvetica", "bold");
-                        pdf.setFontSize(10);
-                        pdf.text("Ergebnisse:", 10, currentY);
-                        currentY += 7;
-                        pdf.setFont("helvetica", "normal");
-                        const results = [
-                            document.getElementById("nutzbareFlaeche").innerText,
-                            document.getElementById("sondenAnzahl").innerText,
-                            document.getElementById("spezEntzugsleistung").innerText,
-                            document.getElementById("gesamteEntzugsleistung").innerText,
-                            document.getElementById("heizleistung").innerText,
-                            document.getElementById("jaehrlicherWaermeentzug").innerText,
-                            document.getElementById("jaehrlicheHeizwaerme").innerText,
-                            document.getElementById("jaehrlicherWaermeeintrag").innerText,
-                            document.getElementById("wärmeleitfähigkeit").innerText,
-                            document.getElementById("tiefenrestriktion").innerText
-                        ];
-                        // Ergebnisse zeilenweise hinzufügen
-                        results.forEach((result, index) => {
-                            pdf.text(result.replace(/\n/g, ": "), 10, currentY + (index * 6));
-                        });
-                        currentY += results.length * 6;
-                        // "Geothermisches Potenzial" mit Umbruch
-                        const geothermalText = document.getElementById("geothermischesPotenzial").innerText;
-                        const wrappedText = pdf.splitTextToSize(geothermalText.replace(/\n/g, ": "), 180);
-                        pdf.text(wrappedText, 10, currentY);
-                        currentY += wrappedText.length * 6;
-                        // Vergleich Regeneration (0, 50, 100 % und der gewählte Wert)
-                        const sz = exportSzenarien();
-                        if (sz) {
-                            pdf.setFont("helvetica", "italic");
-                            pdf.setFontSize(8);
-                            const szNote = pdf.splitTextToSize(sz.fussnote, 190);
-                            const szHoehe = 10 + 12 + sz.zeilen.length * 6 + 3 + szNote.length * 4;
-                            if (currentY + szHoehe > 282) {
-                                pdf.addPage();
-                                currentY = 20;
-                            } else {
-                                currentY += 2;
-                                pdf.setDrawColor(lineColor);
-                                pdf.line(10, currentY, 200, currentY);
-                                currentY += 5;
-                            }
-                            pdf.setFont("helvetica", "bold");
-                            pdf.setFontSize(10);
-                            pdf.setTextColor(sectionTitleColor);
-                            pdf.text("Vergleich Regeneration:", 10, currentY);
-                            currentY += 7;
-                            const spalteBreite = 105 / sz.spalten.length;
-                            const spalteRechts = (i) => 95 + (i + 1) * spalteBreite - 2;
-                            pdf.setFontSize(9);
-                            sz.spalten.forEach((c, i) => {
-                                pdf.setFont("helvetica", c.gewaehlt ? "bold" : "normal");
-                                pdf.setTextColor(c.gewaehlt ? "#F58220" : sectionTitleColor);
-                                pdf.text(c.titel + (c.gewaehlt ? " (gewählt)" : ""), spalteRechts(i), currentY, { align: "right" });
-                            });
-                            currentY += 2;
-                            pdf.setDrawColor(lineColor);
-                            pdf.line(10, currentY, 200, currentY);
-                            currentY += 4.5;
-                            pdf.setFontSize(10);
-                            sz.zeilen.forEach((z) => {
-                                pdf.setFont("helvetica", "normal");
-                                pdf.setTextColor(sectionTitleColor);
-                                pdf.text(z.label + (z.einheit ? ` [${z.einheit}]` : ""), 10, currentY);
-                                z.werte.forEach((v, i) => {
-                                    const warn = z.warn && z.warn[i];
-                                    pdf.setFont("helvetica", sz.spalten[i].gewaehlt ? "bold" : "normal");
-                                    pdf.setTextColor(warn ? "#B45309" : sectionTitleColor);
-                                    pdf.text(v, spalteRechts(i), currentY, { align: "right" });
-                                });
-                                currentY += 6;
-                            });
-                            pdf.setFont("helvetica", "italic");
-                            pdf.setFontSize(8);
-                            pdf.setTextColor("#666666");
-                            pdf.text(szNote, 10, currentY);
-                            currentY += szNote.length * 4;
-                        }
-                        // Footer (auf jeder Seite)
-                        const creationDate = new Date().toLocaleString();
-                        for (let seite = 1; seite <= pdf.getNumberOfPages(); seite++) {
-                            pdf.setPage(seite);
-                            pdf.setFont("helvetica", "italic");
-                            pdf.setFontSize(8);
-                            pdf.setTextColor("#666666");
-                            pdf.text(`Erstellt am ${creationDate} (Geo-Check light)`, 105, 290, { align: "center" });
-                        }
-
-                        pdf.save("GeoCheck-Ergebnisse.pdf");
-                        if (mapMissing) {
-                            showErrorDialog("Das PDF wurde ohne Karte erstellt: Ihr Browser hat das Auslesen der Karte blockiert (z. B. Brave-Schutzmaßnahmen gegen Fingerprinting). Deaktivieren Sie für diese Seite die Brave Shields oder nutzen Sie einen anderen Browser.");
-                        }
-                        }
+                    const ergebnis = baueErgebnisPdf(img, polygonBounds.isValid() ? polygonBounds.getCenter() : null, opt);
+                    ergebnis.pdf.save("GeoCheck-Ergebnisse.pdf");
+                    if (ergebnis.ohneKarte) {
+                        showErrorDialog("Das PDF wurde ohne Karte erstellt: Ihr Browser hat das Auslesen der Karte blockiert (z. B. Brave-Schutzmaßnahmen gegen Fingerprinting). Deaktivieren Sie für diese Seite die Brave Shields oder nutzen Sie einen anderen Browser.");
                     }
                 })
                 .catch((error) => {
@@ -3707,17 +3545,381 @@
                     showErrorDialog("Das PDF konnte nicht erstellt werden: " + error.message);
                 });
         }
-        document.getElementById("pdfButton").addEventListener("click", exportResultsToPDF);
+
+        // Die eingebaute PDF-Schrift (WinAnsi) kennt nicht jedes Zeichen; andere (z. B. Emojis) entfallen.
+        function pdfSicher(text) {
+            return Array.from(text).filter((c) => /[\u0020-\u007E\u00A0-\u00FF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u20AC]/.test(c)).join("").replace(/\s+/g, " ").trim();
+        }
+
+        // Wert eines Ergebnisfelds aus dem Seitentext (alles nach der Beschriftungszeile).
+        function feldWertFuerPdf(id, einheit) {
+            // der Wert ist der Text hinter dem Beschriftungs-Span (unabhängig vom Zeilenumbruch der Seite)
+            const wert = Array.from(document.getElementById(id).childNodes)
+                .filter((n) => n.nodeType === 3).map((n) => n.textContent).join(' ').replace(/\s+/g, ' ').trim();
+            if (!wert || wert === '-') return '–';
+            return (einheit && /\d/.test(wert) ? `${wert} ${einheit}` : wert).replace(/ - /g, ' – ');
+        }
+
+        // Daten für PDF und PNG aus der Seite: Kennzahlen, Tabellen, Hinweise, Vergleich der Regeneration.
+        // mitte: Mittelpunkt der Fläche (L.LatLng) oder null; opt: { projektname, regenerationsvergleich }.
+        function sammleExportDaten(mitte, opt) {
+            const nachKomma = (x) => x.toLocaleString("de-DE", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+            const ort = mitte ? `Standort (Flächenmitte): ${nachKomma(mitte.lat)}° N, ${nachKomma(mitte.lng)}° O` : "";
+            const anzahl = exportValue("sondenAnzahl")[0];
+            const spez = exportValue("spezEntzugsleistung");
+            const gesamt = exportValue("gesamteEntzugsleistung");
+            const tiefeHinweis = tiefeModus === "manuell" ? "manuell" : (typeof tiefeAuto === "number" ? "maximal möglich" : "Standardwert");
+            const kennzahlen = [
+                { label: "Sondenanzahl", wert: anzahl, einheit: anzahl === "1" ? "Sonde" : "Sonden" },
+                { label: "Sondentiefe", wert: exportNumber("sondenTiefe"), einheit: "m", sub: tiefeHinweis },
+                { label: "Spez. Entzugsleistung", wert: spez[0], einheit: spez[1] },
+                { label: "Entzugsleistung", wert: gesamt[0], einheit: gesamt[1] },
+            ];
+            const rest = (id) => exportValue(id).join(" ").replace(/\s+$/, "");
+            const stunden = parseInt(document.getElementById("volllaststunden").value, 10);
+            const entzugAtlas = potenzialZustand && potenzialZustand.entzug[stunden];
+            const ergebnisse = [
+                { label: "Nutzbare Fläche", wert: rest("nutzbareFlaeche") },
+                { label: "Heizleistung der Wärmepumpe", wert: rest("heizleistung") },
+                { label: "Jährlicher Wärmeentzug", wert: rest("jaehrlicherWaermeentzug") },
+                { label: "Jährliche Heizwärme", wert: rest("jaehrlicheHeizwaerme") },
+                { label: "Jährlicher Wärmeeintrag", wert: rest("jaehrlicherWaermeeintrag") },
+            ];
+            const standort = [
+                { label: "Wärmeleitfähigkeit bis 100 m", wert: feldWertFuerPdf("wärmeleitfähigkeit", "W/(m·K)") },
+                { label: "Zulässige Bohrtiefe", wert: feldWertFuerPdf("tiefenrestriktion", "m"), sub: "bis Oberkante Rupelton" },
+                { label: "Entzugsleistung (Energieatlas)", wert: entzugAtlas ? potenzialWert(entzugAtlas).replace(/ - /g, " – ") : "–",
+                    sub: `Energieatlas Berlin, 2 Sonden à 100 m, ${stunden} h/a` },
+            ];
+            const copWert = leseZahl("copWärmepumpe");
+            const parameter = [
+                { label: "Abstand zwischen Sonden", wert: `${document.getElementById("sondenAbstand").value} m` },
+                { label: "Abstand zu Gebäuden", wert: `${document.getElementById("gebäudeAbstand").value} m` },
+                { label: "Abstand zu Bäumen", wert: `${document.getElementById("bäumeAbstand").value} m`,
+                    sub: kronenAn() ? "mit Kronenradius, wenn vorhanden" : "" },
+                { label: "Abstand zu Restriktionsflächen", wert: `${document.getElementById("restriktionAbstand").value} m` },
+                { label: "Wärmeleitfähigkeit", wert: `${document.getElementById("lambdaBoden").value} W/(m·K)` },
+                { label: "Volllaststunden", wert: `${document.getElementById("volllaststunden").value} h/a` },
+                { label: "Auslegungszeitraum", wert: document.getElementById("auslegungszeitraum").selectedOptions[0].text },
+                { label: "Regenerationsgrad", wert: `${(getParameterValues().regeneration * 100).toLocaleString("de-DE", { maximumFractionDigits: 2 })} %` },
+                { label: "COP der Wärmepumpe", wert: Number.isFinite(copWert) ? copWert.toLocaleString("de-DE", { minimumFractionDigits: 1, maximumFractionDigits: 2 }) : "–" },
+            ];
+            const einschraenkung = potenzialZustand && potenzialZustand.restriction && potenzialZustand.restriction.name !== POTENZIAL_KEINE_RESTRIKTION.name
+                ? potenzialZustand.restriction.name : "";
+            const auflage = potenzialZustand && potenzialZustand.rupeltonTyp ? potenzialZustand.rupeltonTyp.replace(/[.\s]+$/, "") : "";
+            const eingabeBox = document.getElementById("eingabeHinweis");
+            const hinweise = eingabeBox.classList.contains("hidden") ? []
+                : Array.from(eingabeBox.children).map((p) => p.textContent.trim()).filter(Boolean);
+            return { ort, projekt: opt.projektname || "", kennzahlen, ergebnisse, standort, parameter, einschraenkung, auflage, hinweise,
+                sz: opt.regenerationsvergleich ? exportSzenarien() : null };
+        }
+
+        // Ergebnis-PDF: A4 hoch, Kopf, Karte, vier Kennzahlen, Tabellen in zwei Spalten, Hinweise,
+        // Vergleich der Regeneration, Fußzeile mit Seitenzahl. Ruhig und sachlich: Linien statt Kästen.
+        // img: Kartenbild oder null; mitte: Mittelpunkt der Fläche (L.LatLng) oder null.
+        function baueErgebnisPdf(img, mitte, opt) {
+            const { jsPDF } = window.jspdf;
+            const pdf = new jsPDF({ unit: "mm", format: "a4" });
+            const d = sammleExportDaten(mitte, opt);
+            pdf.setLineHeightFactor(1.3);   // mehrzeilige Absätze: Zeilenabstand = Schriftgröße (pt) x 0,3528 x 1,3 mm
+            const RAND = 18, SEITE_B = 210, B = SEITE_B - 2 * RAND, UNTEN = 281;
+            const F = { tinte: "#18181b", text: "#3f3f46", grau: "#71717a", linie: "#d4d4d8", haar: "#e4e4e7",
+                flaeche: "#f4f4f5", akzent: "#F58220", warn: "#B45309" };
+            const jetzt = new Date();
+            const stand = `${jetzt.toLocaleDateString("de-DE")}, ${jetzt.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })} Uhr`;
+            let y = 0;
+
+            const schrift = (stil, groesse, farbe) => { pdf.setFont("helvetica", stil); pdf.setFontSize(groesse); pdf.setTextColor(farbe); };
+            const strich = (x1, x2, yy, farbe, breite) => { pdf.setDrawColor(farbe); pdf.setLineWidth(breite); pdf.line(x1, yy, x2, yy); };
+            // Text, der in die Breite passt: Schrift wird bei Bedarf bis 7,5 pt verkleinert.
+            const passend = (text, stil, groesse, farbe, maxBreite) => {
+                let g = groesse;
+                schrift(stil, g, farbe);
+                while (g > 7.5 && pdf.getTextWidth(text) > maxBreite) { g -= 0.5; pdf.setFontSize(g); }
+            };
+
+            const kopf = (erste) => {
+                schrift("bold", 10, F.tinte);
+                pdf.text("Geo-Check light", RAND, 14);
+                schrift("normal", 8, F.grau);
+                pdf.text(erste ? `Erstellt am ${stand}` : "Erdwärmesonden-Potenzial", SEITE_B - RAND, 14, { align: "right" });
+                strich(RAND, SEITE_B - RAND, 17.5, F.tinte, 0.35);
+            };
+            const neueSeite = () => { pdf.addPage(); kopf(false); y = 27; };
+            const platz = (h) => { if (y + h > UNTEN) neueSeite(); };
+
+            // Abschnittsüberschrift mit Linie darunter; liefert die y-Position der ersten Zeile.
+            const abschnitt = (x, w, yy, titel) => {
+                schrift("bold", 8, F.tinte);
+                if (pdf.setCharSpace) pdf.setCharSpace(0.35);
+                pdf.text(titel.toUpperCase(), x, yy + 4);
+                if (pdf.setCharSpace) pdf.setCharSpace(0);
+                strich(x, x + w, yy + 6, F.tinte, 0.3);
+                return yy + 6;
+            };
+            // Tabelle aus { label, wert, sub?, warn? }: Beschriftung links, Wert rechts, feine Linien. Liefert das Ende.
+            const tabelle = (x, w, yy, zeilen) => {
+                zeilen.forEach((z) => {
+                    const h = z.sub ? 10.2 : 6.8;
+                    const wertBreite = (schrift("bold", 9, F.tinte), pdf.getTextWidth(z.wert));
+                    passend(z.label, "normal", 9, F.text, w - wertBreite - 4);
+                    pdf.text(z.label, x, yy + 4.5);
+                    schrift("bold", 9, z.warn ? F.warn : F.tinte);
+                    pdf.text(z.wert, x + w, yy + 4.5, { align: "right" });
+                    if (z.sub) {
+                        passend(z.sub, "normal", 7.5, F.grau, w);
+                        pdf.text(z.sub, x, yy + 8);
+                    }
+                    strich(x, x + w, yy + h, F.haar, 0.2);
+                    yy += h;
+                });
+                return yy;
+            };
+
+            // ---- Seite 1: Kopf und Titel
+            kopf(true);
+            pdf.setFillColor(F.akzent);
+            pdf.rect(RAND, 24.5, 12, 1, "F");
+            schrift("bold", 20, F.tinte);
+            pdf.text("Erdwärmesonden-Potenzial", RAND, 35);
+            // Zeilen unter dem Titel: Projekt (nur wenn angegeben) und Standort
+            let yz = 41;
+            if (d.projekt) {
+                const name = pdfSicher(d.projekt);
+                schrift("normal", 9.5, F.grau);
+                pdf.text("Projekt", RAND, yz);
+                const xName = RAND + pdf.getTextWidth("Projekt") + 3;
+                schrift("bold", 10.5, F.tinte);
+                let anzeige = name;
+                while (anzeige.length > 1 && xName + pdf.getTextWidth(anzeige) > RAND + B) anzeige = anzeige.slice(0, -1);
+                pdf.text(anzeige === name ? name : anzeige.trimEnd() + "…", xName, yz);
+                yz += 6;
+            }
+            if (d.ort) {
+                schrift("normal", 9, F.grau);
+                pdf.text(d.ort, RAND, yz);
+                yz += 6;
+            }
+            y = Math.max(47, yz);
+
+            // ---- Karte, ganze Breite; Seitenverhältnis bleibt, nichts wird abgeschnitten
+            let ohneKarte = true;
+            try {
+                if (img && img.width > 0 && img.height > 0) {
+                    const MAX_H = 98;
+                    const seitenverhaeltnis = img.width / img.height;
+                    const bild_h = Math.min(MAX_H, B / seitenverhaeltnis);
+                    const bild_b = bild_h * seitenverhaeltnis;
+                    pdf.setFillColor(F.flaeche);
+                    pdf.rect(RAND, y, B, bild_h, "F");
+                    let daten = img, art = "PNG";
+                    try {   // JPEG hält die Datei klein (die Karte ist ein Foto-ähnliches Bild)
+                        const leinwand = document.createElement("canvas");
+                        leinwand.width = img.width; leinwand.height = img.height;
+                        leinwand.getContext("2d").drawImage(img, 0, 0);
+                        daten = leinwand.toDataURL("image/jpeg", 0.92); art = "JPEG";
+                    } catch (e) { daten = img; art = "PNG"; }
+                    pdf.addImage(daten, art, RAND + (B - bild_b) / 2, y, bild_b, bild_h);
+                    pdf.setDrawColor(F.linie); pdf.setLineWidth(0.2); pdf.rect(RAND, y, B, bild_h);
+                    y += bild_h;
+                    ohneKarte = false;
+                }
+            } catch (error) {
+                addDebugLog("Fehler beim Einfügen der Karte: " + error.message);
+            }
+            if (ohneKarte) {
+                pdf.setFillColor(F.flaeche); pdf.rect(RAND, y, B, 24, "F");
+                schrift("normal", 9, F.grau);
+                pdf.text("Die Karte konnte in diesem Browser nicht übernommen werden.", RAND + B / 2, y + 13, { align: "center" });
+                y += 24;
+            }
+            schrift("normal", 7, F.grau);
+            pdf.text("Kartengrundlage: © OpenStreetMap-Mitwirkende", RAND, y + 4);
+            pdf.text("Rote Punkte: Sondenstandorte", RAND + B, y + 4, { align: "right" });
+            y += 11;
+
+            // ---- Vier Kennzahlen
+            const kennzahlen = d.kennzahlen;
+            const zelle = B / kennzahlen.length;
+            strich(RAND, RAND + B, y, F.linie, 0.2);
+            kennzahlen.forEach((k, i) => {
+                const x = RAND + i * zelle + (i === 0 ? 0 : 5);
+                if (i > 0) { pdf.setDrawColor(F.haar); pdf.setLineWidth(0.2); pdf.line(RAND + i * zelle, y + 3, RAND + i * zelle, y + 21); }
+                schrift("normal", 7.5, F.grau);
+                pdf.text(k.label, x, y + 6.5);
+                schrift("bold", 17, F.tinte);
+                pdf.text(k.wert, x, y + 15);
+                if (k.einheit) {
+                    schrift("normal", 8.5, F.grau);
+                    pdf.text(k.einheit, x + (schrift("bold", 17, F.tinte), pdf.getTextWidth(k.wert)) + 1.5, y + 15);
+                }
+                if (k.sub) { schrift("normal", 7, F.grau); pdf.text(k.sub, x, y + 19.5); }
+            });
+            strich(RAND, RAND + B, y + 23, F.linie, 0.2);
+            y += 31;
+
+            // ---- Zwei Spalten: Ergebnisse und Standortdaten | Berechnungsparameter
+            const SPALTE = (B - 12) / 2, XL = RAND, XR = RAND + SPALTE + 12;
+            const { ergebnisse, standort, parameter } = d;
+            const hoehe = (zeilen) => zeilen.reduce((h, z) => h + (z.sub ? 10.2 : 6.8), 6);
+            platz(Math.max(hoehe(ergebnisse) + 8 + hoehe(standort), hoehe(parameter)));
+            const y0 = y;
+            let yl = tabelle(XL, SPALTE, abschnitt(XL, SPALTE, y0, "Ergebnisse"), ergebnisse);
+            yl = tabelle(XL, SPALTE, abschnitt(XL, SPALTE, yl + 8, "Standortdaten"), standort);
+            const yr = tabelle(XR, SPALTE, abschnitt(XR, SPALTE, y0, "Berechnungsparameter"), parameter.map((p) => p.sub ? p : { label: p.label, wert: p.wert }));
+            y = Math.max(yl, yr) + 9;
+
+            // ---- Hinweise: Einschränkung und Auflage aus dem Energieatlas, Hinweise zu den Eingaben
+            const { einschraenkung, auflage, hinweise } = d;
+            if (einschraenkung || auflage || hinweise.length) {
+                const kopfH = 9;
+                platz(kopfH + 14);
+                let yy = abschnitt(RAND, B, y, "Hinweise");
+                y = yy + 3;
+                const absatz = (titel, text, farbe) => {
+                    schrift("normal", 8.5, F.text);
+                    const zeilen = pdf.splitTextToSize(text, B - 6);
+                    const hoehe = (titel ? 4.4 : 0) + zeilen.length * 3.9 + 2.2;
+                    platz(hoehe + 2);
+                    pdf.setFillColor(farbe); pdf.rect(RAND, y, 0.9, hoehe - 1, "F");
+                    let yt = y + 3.6;
+                    if (titel) { schrift("bold", 8, F.tinte); pdf.text(titel, RAND + 4, yt); yt += 4.4; }
+                    schrift("normal", 8.5, F.text);
+                    pdf.text(zeilen, RAND + 4, yt);
+                    y += hoehe + 1.5;
+                };
+                if (einschraenkung || auflage) {
+                    absatz("Energieatlas Berlin", [einschraenkung && einschraenkung + ".", auflage && "Auflage: " + auflage + "."].filter(Boolean).join("\n"), F.warn);
+                }
+                hinweise.forEach((t) => absatz("", t, F.akzent));
+                y += 5;
+            }
+
+            // ---- Vergleich Regeneration
+            const sz = d.sz;
+            if (sz) {
+                schrift("normal", 7.5, F.grau);
+                const notiz = pdf.splitTextToSize(sz.fussnote, B);
+                const kopfZeile = 11, zeileH = 6.6;
+                platz(6 + kopfZeile + sz.zeilen.length * zeileH + 4 + notiz.length * 3.45);
+                const yk = abschnitt(RAND, B, y, "Vergleich Regeneration");
+                const n = sz.spalten.length, sp = 27;
+                const rechts = (i) => RAND + B - (n - 1 - i) * sp - 2;
+                const tabH = kopfZeile + sz.zeilen.length * zeileH;
+                sz.spalten.forEach((c, i) => {
+                    if (c.gewaehlt) { pdf.setFillColor(F.flaeche); pdf.rect(RAND + B - (n - i) * sp, yk + 0.6, sp, tabH - 0.6, "F"); }
+                });
+                sz.spalten.forEach((c, i) => {
+                    schrift(c.gewaehlt ? "bold" : "normal", 9, F.tinte);
+                    pdf.text(c.titel, rechts(i), yk + 5.5, { align: "right" });
+                    if (c.gewaehlt) { schrift("normal", 7, F.akzent); pdf.text("gewählt", rechts(i), yk + 9, { align: "right" }); }
+                });
+                let yz = yk + kopfZeile;
+                strich(RAND, RAND + B, yz, F.linie, 0.2);
+                sz.zeilen.forEach((z) => {
+                    schrift("normal", 9, F.text);
+                    pdf.text(z.label, RAND + 1.5, yz + 4.6);
+                    if (z.einheit) { schrift("normal", 7.5, F.grau); pdf.text(z.einheit, RAND + 1.5 + (schrift("normal", 9, F.text), pdf.getTextWidth(z.label)) + 1.5, yz + 4.6); }
+                    z.werte.forEach((v, i) => {
+                        const warn = z.warn && z.warn[i];
+                        schrift(sz.spalten[i].gewaehlt ? "bold" : "normal", 9, warn ? F.warn : F.tinte);
+                        pdf.text(v, rechts(i), yz + 4.6, { align: "right" });
+                    });
+                    yz += zeileH;
+                    strich(RAND, RAND + B, yz, F.haar, 0.2);
+                });
+                schrift("normal", 7.5, F.grau);
+                pdf.text(notiz, RAND, yz + 5);
+                y = yz + 5 + notiz.length * 3.45;
+            }
+
+            // ---- Fußzeile auf jeder Seite
+            const seiten = pdf.getNumberOfPages();
+            for (let seite = 1; seite <= seiten; seite++) {
+                pdf.setPage(seite);
+                strich(RAND, RAND + B, 287, F.haar, 0.2);
+                schrift("normal", 7.5, F.grau);
+                pdf.text("Geo-Check light · Orientierungswert, keine Genehmigungs- oder Ausführungsplanung", RAND, 291.5);
+                pdf.text(`Seite ${seite} von ${seiten}`, RAND + B, 291.5, { align: "right" });
+            }
+            return { pdf: pdf, ohneKarte: ohneKarte };
+        }
+        document.getElementById("pdfButton").addEventListener("click", () => zeigeExportDialog("pdf"));
+
 
         //-----------------------------------------------------------
-        // PNG-Export ("Bericht-Bild"): Karte oben, Ergebnis-Kacheln unten.
+        // Fenster vor dem Export (PDF und PNG): Projektname (optional) und die Wahl, ob der
+        // Vergleich der Regeneration in den Export kommt. Die Eingaben bleiben für weitere Exporte erhalten.
+        //-----------------------------------------------------------
+        const exportEinstellungen = { projektname: "", regenerationsvergleich: true };
+
+        // Projektname aus dem Eingabefeld: Leerraum vereinheitlicht, Steuerzeichen entfernt, höchstens 80 Zeichen.
+        function bereinigeProjektname(text) {
+            return String(text || "").replace(/[\u0000-\u001F\u007F]/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
+        }
+
+        // format: "pdf" oder "png"
+        function zeigeExportDialog(format) {
+            if (geothermalPointsLayer.getLayers().length === 0) {
+                showErrorDialog("Es wurden keine Sonden ermittelt. Bitte klicken Sie auf 'Berechnen' und versuchen Sie es erneut.");
+                return;
+            }
+            document.querySelectorAll("dialog.app-dialog").forEach((d) => d.close());
+            const dialog = document.createElement("dialog");
+            dialog.className = "app-dialog p-0 bg-white rounded-lg shadow-xl w-11/12 max-w-md border border-zinc-200";
+            dialog.setAttribute("aria-labelledby", "exportTitel");
+            dialog.innerHTML = `
+                <form class="p-6 space-y-5 text-sm text-zinc-800">
+                    <h2 id="exportTitel" class="text-base font-semibold text-zinc-900">${format === "pdf" ? "Als PDF exportieren" : "Als Bild (PNG) exportieren"}</h2>
+                    <div class="space-y-1.5">
+                        <label for="exportProjektname" class="block font-medium text-zinc-700">Projektname <span class="font-normal text-zinc-500">(optional)</span></label>
+                        <input id="exportProjektname" type="text" maxlength="80" autocomplete="off" placeholder="z. B. Musterstraße 12"
+                            class="w-full px-3 py-2 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none text-sm">
+                        <p class="text-xs text-zinc-500">Erscheint im Export. Ohne Eingabe entfällt die Zeile.</p>
+                    </div>
+                    <label class="flex items-start gap-3 cursor-pointer">
+                        <input id="exportRegeneration" type="checkbox" class="mt-0.5 w-4 h-4 accent-zinc-900">
+                        <span>
+                            <span class="block font-medium text-zinc-700">Vergleich Regeneration einbeziehen</span>
+                            <span class="block text-xs text-zinc-500">Tabelle mit 0 %, 50 %, 100 % und dem gewählten Wert.</span>
+                        </span>
+                    </label>
+                    <div class="flex gap-2 pt-1">
+                        <button type="button" id="exportAbbrechen"
+                            class="flex-1 px-4 py-2 text-sm font-medium text-zinc-700 bg-white border border-zinc-300 rounded hover:bg-zinc-50 transition-colors">Abbrechen</button>
+                        <button type="submit" id="exportStarten"
+                            class="flex-1 px-4 py-2 text-sm font-medium text-white bg-zinc-900 rounded hover:bg-zinc-800 transition-colors">Exportieren</button>
+                    </div>
+                </form>`;
+            const eingabe = dialog.querySelector("#exportProjektname");
+            const haken = dialog.querySelector("#exportRegeneration");
+            eingabe.value = exportEinstellungen.projektname;     // als Wert gesetzt, nie als HTML
+            haken.checked = exportEinstellungen.regenerationsvergleich;
+            dialog.querySelector("form").addEventListener("submit", (e) => {
+                e.preventDefault();
+                exportEinstellungen.projektname = bereinigeProjektname(eingabe.value);
+                exportEinstellungen.regenerationsvergleich = haken.checked;
+                const opt = Object.assign({}, exportEinstellungen);
+                dialog.close();
+                if (format === "pdf") exportResultsToPDF(opt); else exportResultsToPNG(opt);
+            });
+            dialog.querySelector("#exportAbbrechen").addEventListener("click", () => dialog.close());
+            dialog.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+            dialog.addEventListener("close", () => dialog.remove());
+            document.body.appendChild(dialog);
+            dialog.showModal();
+            eingabe.focus();
+        }
+
+        //-----------------------------------------------------------
+        // PNG-Export ("Bericht-Bild"): Karte oben, Kennzahlen und Vergleich unten.
         // Gezeichnet direkt auf ein Canvas (keine zusätzliche Bibliothek),
         // Design siehe design/geocheck-light-export-entwurf.html.
         //-----------------------------------------------------------
         const EXPORT_FONT = "Inter, system-ui, -apple-system, 'Segoe UI', sans-serif";
 
         // Karte auf die gezeichneten Flächen zoomen und als Bild holen (wie beim PDF-Export).
-        // Gibt { img, cssWidth, metersPerCssPx } zurück; img ist null, wenn der Browser das Auslesen blockiert.
+        // Gibt { img, cssWidth, metersPerCssPx, mitte } zurück (mitte: Mittelpunkt der Fläche); img ist null, wenn der Browser das Auslesen blockiert.
         async function captureMapForExport() {
             const bounds = new L.LatLngBounds();
             drawnItems.eachLayer((layer) => { if (layer instanceof L.Polygon) bounds.extend(layer.getBounds()); });
@@ -3739,21 +3941,20 @@
                     i.src = dataUrl;
                 });
                 if (!(img.width > 0 && img.height > 0)) throw new Error("Leeres Kartenbild");
-                return { img, cssWidth: size.x, metersPerCssPx };
+                return { img, cssWidth: size.x, metersPerCssPx, mitte: map.getCenter() };
             } catch (error) {
                 addDebugLog("Fehler während der Screenshot-Erstellung: " + error.message);
-                return { img: null, cssWidth: size.x, metersPerCssPx };
+                return { img: null, cssWidth: size.x, metersPerCssPx, mitte: map.getCenter() };
             }
         }
 
-        function exportRoundRect(ctx, x, y, w, h, r) {
-            ctx.beginPath();
-            ctx.moveTo(x + r, y);
-            ctx.arcTo(x + w, y, x + w, y + h, r);
-            ctx.arcTo(x + w, y + h, x, y + h, r);
-            ctx.arcTo(x, y + h, x, y, r);
-            ctx.arcTo(x, y, x + w, y, r);
-            ctx.closePath();
+        // Kürzt einen Text mit "…" auf die Breite (Schrift f).
+        function exportKuerzen(ctx, text, maxBreite, f) {
+            ctx.font = f;
+            if (ctx.measureText(text).width <= maxBreite) return text;
+            let t = text;
+            while (t.length > 1 && ctx.measureText(t + '…').width > maxBreite) t = t.slice(0, -1);
+            return t.trimEnd() + '…';
         }
 
         function exportSpacing(ctx, px) { if ('letterSpacing' in ctx) ctx.letterSpacing = px + 'px'; }
@@ -3819,10 +4020,11 @@
             };
         }
 
-        function buildExportCanvas(map_) {
+        function buildExportCanvas(map_, opt) {
             const W = 1200, SC = 2, PAD = 28;
-            const INK = '#18181b', INK2 = '#52525b', INK3 = '#a1a1aa', LINE = '#e4e4e7', BG = '#f4f4f5';
-            const BEA = '#F58220', BEA_SOFT = '#FEF3E8', BEA_LINE = '#f9d2ad';
+            const INK = '#18181b', INK2 = '#52525b', INK3 = '#71717a', LINE = '#d4d4d8', BG = '#f4f4f5';
+            const BEA = '#F58220', BEA_SOFT = '#f4f4f5', BEA_LINE = '#d4d4d8';
+            const INK_TEXT = '#3f3f46', HAAR = '#e4e4e7';
             const font = (weight, size) => `${weight} ${size}px ${EXPORT_FONT}`;
 
             // ---- Inhalte
@@ -3868,37 +4070,29 @@
             mctx.font = font(400, 11);
             const noteLines = [];
             // Reihenfolge: Kühlgrenzen (Vergleich), Hinweise zu den Eingaben, Auflagen - ohne Leerzeile
-            const sz = exportSzenarien(false);
+            const sz = opt.regenerationsvergleich ? exportSzenarien(false) : null;
             if (sz) exportWrap(mctx, sz.fussnote, W - 2 * PAD).forEach((l) => noteLines.push({ t: l, c: INK3 }));
             warnTexts.forEach((t) => exportWrap(mctx, t, W - 2 * PAD).forEach((l) => noteLines.push({ t: l, c: '#92400e' })));
             if (auflagen) exportWrap(mctx, auflagen, W - 2 * PAD).forEach((l) => noteLines.push({ t: l, c: INK3 }));
 
-            const chipRows = [[]];
-            let rowX = PAD;
-            chips.forEach(([label, value]) => {
-                mctx.font = font(400, 11); const lw = mctx.measureText(label + ' ').width;
-                mctx.font = font(600, 11); const vw = mctx.measureText(value).width;
-                const w = lw + vw + 20;
-                if (rowX + w > W - PAD && chipRows[chipRows.length - 1].length) { chipRows.push([]); rowX = PAD; }
-                chipRows[chipRows.length - 1].push({ label, value, lw, w, x: rowX });
-                rowX += w + 8;
-            });
+            const GRID_COLS = 3, GRID_ROW_H = 44;
+            const gridRows = Math.ceil(chips.length / GRID_COLS);
 
             // Vergleich Regeneration: Überschrift, Kopfzeile, eine Zeile je Wert (Fußnote: noteLines)
             const SZ_HEAD = 34, SZ_ROW = 27;
             const szH = sz ? 24 + SZ_HEAD + sz.zeilen.length * SZ_ROW : 0;
 
-            const HERO_H = 137, MINOR_H = 104, FOOT_H = 35;
+            const HERO_H = 112, MINOR_H = 90, FOOT_H = 40;
             const heroTop = mapH + 26 + 25;
-            const minorTop = heroTop + HERO_H + 14;
+            const minorTop = heroTop + HERO_H;
             let y = minorTop + MINOR_H + 14;
             const szTop = y + 12;
-            if (sz) y = szTop + szH + 6;
+            y = sz ? szTop + szH + 6 : y + 14;   // ohne Vergleich etwas Abstand unter dem Kennzahlenstreifen
             const notesTop = y;
             y += noteLines.length * 16.5;
             const assumpTop = y + (noteLines.length ? 18 : 4);
-            const chipsTop = assumpTop + 20;
-            const footTop = chipsTop + chipRows.length * 27 - 6 + 18;
+            const chipsTop = assumpTop + 24;
+            const footTop = chipsTop + gridRows * GRID_ROW_H + 8;
             const H = footTop + FOOT_H;
 
             // ---- Zeichnen
@@ -3926,22 +4120,26 @@
             }
             ctx.restore();
 
-            const pill = (x, y_, w, h, r) => {
-                ctx.save();
-                ctx.shadowColor = 'rgba(0,0,0,.16)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
-                ctx.fillStyle = 'rgba(255,255,255,.96)';
-                exportRoundRect(ctx, x, y_, w, h, r); ctx.fill();
-                ctx.restore();
+            const pill = (x, y_, w, h) => {
+                ctx.fillStyle = 'rgba(255,255,255,.96)'; ctx.fillRect(x, y_, w, h);
+                ctx.strokeStyle = LINE; ctx.lineWidth = 1; ctx.strokeRect(x + 0.5, y_ + 0.5, w - 1, h - 1);
             };
 
-            // Titelkarte
-            ctx.font = font(600, 17); exportSpacing(ctx, -0.17);
+            // Titel: flaches Schild mit Akzentstrich; mit Projektname eine zweite Zeile
+            ctx.font = font(700, 17); exportSpacing(ctx, -0.17);
             const title = 'Erdwärmesonden-Potenzial';
             const tw = ctx.measureText(title).width;
-            pill(20, 20, 14 + 4 + 12 + tw + 16, 46, 10);
-            ctx.fillStyle = BEA; exportRoundRect(ctx, 34, 32, 4, 22, 2); ctx.fill();
-            ctx.fillStyle = INK; ctx.fillText(title, 50, 49);
             exportSpacing(ctx, 0);
+            const projektZeile = opt.projektname ? exportKuerzen(ctx, 'Projekt: ' + opt.projektname, W - 120, font(500, 13.5)) : '';
+            ctx.font = font(500, 13.5);
+            const pw = projektZeile ? ctx.measureText(projektZeile).width : 0;
+            const schildH = projektZeile ? 64 : 44;
+            pill(20, 20, 4 + 16 + Math.max(tw, pw) + 20, schildH);
+            ctx.fillStyle = BEA; ctx.fillRect(20, 20, 4, schildH);
+            ctx.font = font(700, 17); exportSpacing(ctx, -0.17);
+            ctx.fillStyle = INK; ctx.fillText(title, 40, projektZeile ? 45 : 48);
+            exportSpacing(ctx, 0);
+            if (projektZeile) { ctx.font = font(500, 13.5); ctx.fillStyle = INK2; ctx.fillText(projektZeile, 40, 66); }
 
             // Maßstab
             if (map_.img && map_.metersPerCssPx > 0) {
@@ -3975,40 +4173,29 @@
             ctx.fillStyle = INK3; ctx.fillText('ERGEBNIS', PAD, mapH + 26 + 9);
             exportSpacing(ctx, 0);
 
-            // Kacheln
-            const tile = (t, x, y_, w, h, big) => {
-                const padX = big ? 22 : 18, padT = big ? 20 : 16;
-                ctx.fillStyle = t.key ? BEA_SOFT : (big ? '#fff' : '#fafafa');
-                exportRoundRect(ctx, x + 0.5, y_ + 0.5, w - 1, h - 1, 12); ctx.fill();
-                ctx.strokeStyle = t.key ? BEA_LINE : LINE; ctx.lineWidth = 1; ctx.stroke();
-                if (t.key) {
-                    ctx.fillStyle = BEA;
-                    ctx.beginPath(); ctx.moveTo(x, y_ + 18); ctx.lineTo(x + 4, y_ + 18);
-                    ctx.arcTo(x + 4, y_ + h - 18, x, y_ + h - 18, 3);
-                    ctx.lineTo(x, y_ + h - 18); ctx.closePath(); ctx.fill();
-                    ctx.fillRect(x, y_ + 18, 4, h - 36);
-                }
-                ctx.font = font(500, 12.5); ctx.fillStyle = INK2;
-                ctx.fillText(t.label, x + padX, y_ + padT + 12);
-                const numSize = big ? 54 : 28;
-                const base = y_ + padT + 18 + 6 + numSize * 0.8;
-                ctx.font = font(700, numSize); exportSpacing(ctx, -numSize * 0.03);
-                ctx.fillStyle = INK; ctx.fillText(t.v[0], x + padX, base);
-                const nw = ctx.measureText(t.v[0]).width;
-                exportSpacing(ctx, 0);
-                if (t.v[1]) {
-                    ctx.font = font(500, big ? 20 : 13); ctx.fillStyle = INK2;
-                    ctx.fillText(t.v[1], x + padX + nw + (big ? 7 : 7), base);
-                }
-                if (t.sub) {
-                    ctx.font = font(400, 11.5); ctx.fillStyle = INK3;
-                    ctx.fillText(t.sub, x + padX, y_ + h - (big ? 22 : 19));
-                }
+            // Kennzahlen: Streifen mit Spalten und feinen Linien statt Kacheln
+            const streifen = (liste, top, h, big) => {
+                const cw = (W - 2 * PAD) / liste.length;
+                ctx.fillStyle = LINE; ctx.fillRect(PAD, top, W - 2 * PAD, 1);
+                liste.forEach((t, i) => {
+                    const x = PAD + i * cw + (i === 0 ? 0 : 22);
+                    if (i > 0) { ctx.fillStyle = HAAR; ctx.fillRect(PAD + i * cw, top + 12, 1, h - 24); }
+                    if (t.key) { ctx.fillStyle = BEA; ctx.fillRect(PAD + i * cw + (i === 0 ? 0 : 22), top, 44, 3); }
+                    ctx.font = font(500, big ? 12.5 : 12); ctx.fillStyle = INK3;
+                    ctx.fillText(t.label, x, top + (big ? 28 : 25));
+                    const numSize = big ? 44 : 26;
+                    const base = top + (big ? 78 : 58);
+                    ctx.font = font(700, numSize); exportSpacing(ctx, -numSize * 0.03);
+                    ctx.fillStyle = INK; ctx.fillText(t.v[0], x, base);
+                    const nw = ctx.measureText(t.v[0]).width;
+                    exportSpacing(ctx, 0);
+                    if (t.v[1]) { ctx.font = font(500, big ? 18 : 13); ctx.fillStyle = INK3; ctx.fillText(t.v[1], x + nw + 6, base); }
+                    if (t.sub) { ctx.font = font(400, 11.5); ctx.fillStyle = INK3; ctx.fillText(t.sub, x, top + h - (big ? 14 : 8)); }
+                });
             };
-            const heroW = (W - 2 * PAD - (hero.length - 1) * 14) / hero.length;
-            hero.forEach((t, i) => tile(t, PAD + i * (heroW + 14), heroTop, heroW, HERO_H, true));
-            const minorW = (W - 2 * PAD - 3 * 14) / 4;
-            minor.forEach((t, i) => tile(t, PAD + i * (minorW + 14), minorTop, minorW, MINOR_H, false));
+            streifen(hero, heroTop, HERO_H, true);
+            streifen(minor, minorTop, MINOR_H, false);
+            ctx.fillStyle = LINE; ctx.fillRect(PAD, minorTop + MINOR_H, W - 2 * PAD, 1);
 
             // Vergleich Regeneration: dezente Tabelle, gewählte Spalte hinterlegt
             if (sz) {
@@ -4023,7 +4210,7 @@
                 sz.spalten.forEach((c, i) => {
                     if (!c.gewaehlt) return;
                     ctx.fillStyle = BEA_SOFT;
-                    exportRoundRect(ctx, PAD + labelW + i * colW + 6, tTop, colW - 12, tableH, 10); ctx.fill();
+                    ctx.fillRect(PAD + labelW + i * colW + 6, tTop, colW - 12, tableH);
                 });
                 ctx.textAlign = 'center';
                 sz.spalten.forEach((c, i) => {
@@ -4037,7 +4224,7 @@
                 });
                 sz.zeilen.forEach((z, r) => {
                     const y0 = tTop + SZ_HEAD + r * SZ_ROW;
-                    ctx.fillStyle = LINE; ctx.fillRect(PAD, y0, W - 2 * PAD, 1);
+                    ctx.fillStyle = HAAR; ctx.fillRect(PAD, y0, W - 2 * PAD, 1);
                     const base = y0 + 18;
                     ctx.textAlign = 'left';
                     ctx.font = font(500, 12.5); ctx.fillStyle = INK2; ctx.fillText(z.label, PAD, base);
@@ -4060,32 +4247,31 @@
             ctx.font = font(400, 11);
             noteLines.forEach((l, i) => { ctx.fillStyle = l.c; ctx.fillText(l.t, PAD, notesTop + 12 + i * 16.5); });
 
-            // Annahmen
-            ctx.font = font(600, 10); exportSpacing(ctx, 0.9);
+            // Annahmen: Raster aus Beschriftung und Wert
+            ctx.font = font(600, 11); exportSpacing(ctx, 0.99);
             ctx.fillStyle = INK3; ctx.fillText('ANNAHMEN DER BERECHNUNG', PAD, assumpTop + 8);
             exportSpacing(ctx, 0);
-            chipRows.forEach((row, r) => {
-                const cy = chipsTop + r * 27;
-                row.forEach((c) => {
-                    ctx.fillStyle = BG; exportRoundRect(ctx, c.x, cy, c.w, 21, 10.5); ctx.fill();
-                    ctx.font = font(400, 11); ctx.fillStyle = INK2; ctx.fillText(c.label + ' ', c.x + 10, cy + 14.5);
-                    ctx.font = font(600, 11); ctx.fillStyle = INK; ctx.fillText(c.value, c.x + 10 + c.lw, cy + 14.5);
-                });
+            ctx.fillStyle = LINE; ctx.fillRect(PAD, assumpTop + 16, W - 2 * PAD, 1);
+            const gcw = (W - 2 * PAD) / GRID_COLS;
+            chips.forEach(([label, value], i) => {
+                const col = i % GRID_COLS, row = Math.floor(i / GRID_COLS);
+                const gx = PAD + col * gcw, gy = chipsTop + row * GRID_ROW_H;
+                ctx.font = font(400, 11.5); ctx.fillStyle = INK3; ctx.fillText(label, gx, gy + 14);
+                ctx.font = font(600, 13.5); ctx.fillStyle = INK; ctx.fillText(value, gx, gy + 33);
             });
 
-            // Fußzeile
-            ctx.fillStyle = BG; ctx.fillRect(0, footTop, W, FOOT_H);
-            ctx.fillStyle = BEA; ctx.beginPath(); ctx.arc(PAD + 3.5, footTop + FOOT_H / 2, 3.5, 0, Math.PI * 2); ctx.fill();
+            // Fußzeile: feine Linie, ruhige Schrift
+            ctx.fillStyle = HAAR; ctx.fillRect(PAD, footTop, W - 2 * PAD, 1);
             ctx.font = font(600, 10.5); ctx.fillStyle = INK2;
-            ctx.fillText('Geo-Check light', PAD + 14, footTop + 21);
+            ctx.fillText('Geo-Check light', PAD, footTop + 24);
             ctx.font = font(400, 10.5); ctx.fillStyle = INK3; ctx.textAlign = 'right';
             ctx.fillText(`Orientierungswert, keine Genehmigungs- oder Ausführungsplanung · ${new Date().toLocaleDateString('de-DE')}`,
-                W - PAD, footTop + 21);
+                W - PAD, footTop + 24);
             ctx.textAlign = 'left';
             return canvas;
         }
 
-        async function exportResultsToPNG() {
+        async function exportResultsToPNG(opt) {
             if (geothermalPointsLayer.getLayers().length === 0) {
                 showErrorDialog("Es wurden keine Sonden ermittelt. Bitte klicken Sie auf 'Berechnen' und versuchen Sie es erneut.");
                 return;
@@ -4097,7 +4283,7 @@
                 try {
                     await Promise.all(['400', '500', '600', '700'].map((w) => document.fonts.load(`${w} 14px Inter`)));
                 } catch (e) { /* Schrift nicht ladbar: Ersatzschrift */ }
-                const canvas = buildExportCanvas(mapShot);
+                const canvas = buildExportCanvas(mapShot, opt);
                 const blob = await new Promise((resolve, reject) =>
                     canvas.toBlob((b) => b ? resolve(b) : reject(new Error("Bild konnte nicht erzeugt werden")), "image/png"));
                 const url = URL.createObjectURL(blob);
@@ -4115,7 +4301,7 @@
                 button.disabled = false;
             }
         }
-        document.getElementById("pngButton").addEventListener("click", exportResultsToPNG);
+        document.getElementById("pngButton").addEventListener("click", () => zeigeExportDialog("png"));
 
 
 
@@ -4206,7 +4392,7 @@
 
             const rupeltonElement = document.getElementById("tiefenrestriktion");
             if (rupeltonElement) {
-                rupeltonElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton [m]</span> -`;
+                rupeltonElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Zulässige Bohrtiefe [m]</span> -`;
             }
             setzeAutoTiefe(undefined);
         }
