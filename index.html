@@ -194,20 +194,229 @@
             max-width: 300px;
         }
 
-        /* Layer Select Control specific styling */
-        .layer-select-control {
-            background: white;
-            border: 1px solid #e4e4e7 !important;
-            border-radius: 6px;
-            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-            padding: 4px;
+        /* Drawing mode bar on the map (Sondenfeld / Restriktionsfläche / Baum) */
+        #modusLeiste {
+            position: absolute;
+            top: 12px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            max-width: calc(100% - 140px);
+            pointer-events: none;
         }
 
-        .layer-select {
-            font-family: 'Inter', sans-serif;
-            font-size: 0.75rem;
-            color: #3f3f46;
-            outline: none;
+        #modusLeiste .seg,
+        #modusBand {
+            pointer-events: auto;
+            background: #fff;
+            border: 1px solid #e4e4e7;
+            box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 4px 10px -2px rgb(0 0 0 / 0.08);
+        }
+
+        #modusLeiste .seg {
+            display: flex;
+            border-radius: 8px;
+            padding: 3px;
+        }
+
+        #modusLeiste .seg button {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #52525b;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+
+        #modusLeiste .seg button:hover {
+            background: #f4f4f5;
+        }
+
+        #modusLeiste .seg button[aria-pressed="true"] {
+            background: #18181b;
+            color: #fff;
+        }
+
+        #modusLeiste .seg .beschriftung {
+            align-self: center;
+            padding: 0 8px 0 10px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #71717a;
+            white-space: nowrap;
+        }
+
+        #modusLeiste .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+        }
+
+        #modusBand {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            border-left: 4px solid var(--modus-farbe, #18181b);
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 12.5px;
+            color: #27272a;
+        }
+
+        #modusBand.sichtbar {
+            display: flex;
+        }
+
+        #modusBand .esc {
+            white-space: nowrap;
+            color: #71717a;
+        }
+
+        #modusBand kbd {
+            font: 600 11px ui-monospace, monospace;
+            background: #f4f4f5;
+            border: 1px solid #e4e4e7;
+            border-radius: 4px;
+            padding: 1px 5px;
+        }
+
+        @media (max-width: 767px) {
+            /* Between the left toolbar and the layers button: tight, and nothing may overflow */
+            #modusLeiste {
+                left: 58px;
+                right: 84px;
+                transform: none;
+                align-items: stretch;
+                max-width: none;
+            }
+
+            #modusLeiste .seg {
+                padding: 2px;
+                overflow: hidden;
+            }
+
+            #modusLeiste .seg button {
+                flex: 1 1 auto;
+                min-width: 0;
+                justify-content: center;
+                gap: 4px;
+                padding: 6px 6px;
+                font-size: 12px;
+            }
+
+            #modusLeiste .dot {
+                width: 7px;
+                height: 7px;
+                flex: none;
+            }
+
+            #modusLeiste .lang,
+            #modusLeiste .seg .beschriftung {
+                display: none;
+            }
+
+            #modusBand {
+                font-size: 12px;
+                padding: 7px 10px;
+            }
+        }
+
+        /* Very narrow phones: the colour dots go, the labels stay */
+        @media (max-width: 380px) {
+            #modusLeiste .dot {
+                display: none;
+            }
+        }
+
+        /* No keyboard on touch screens: no Esc hint */
+        @media (pointer: coarse) {
+            #modusBand .esc {
+                display: none;
+            }
+        }
+
+        /* The tool the user is looking for: the draw button (polygon, or tree in tree mode) is
+           dark, and pulses until the first borehole area exists. */
+        .leaflet-draw-toolbar a.leaflet-draw-draw-polygon,
+        .leaflet-draw-toolbar a.leaflet-draw-draw-circlemarker {
+            background-color: #18181b !important;
+            color: #fff !important;
+        }
+
+        .leaflet-draw-toolbar a.leaflet-draw-draw-polygon:hover,
+        .leaflet-draw-toolbar a.leaflet-draw-draw-circlemarker:hover {
+            background-color: #3f3f46 !important;
+        }
+
+        .leaflet-draw-toolbar a.leaflet-draw-draw-polygon.leaflet-draw-toolbar-button-enabled,
+        .leaflet-draw-toolbar a.leaflet-draw-draw-circlemarker.leaflet-draw-toolbar-button-enabled {
+            background-color: #f97316 !important;
+        }
+
+        /* Start prompt: until the first borehole area exists, a large labelled button on the map */
+        #startHilfe {
+            position: absolute;
+            left: 50%;
+            bottom: 36px;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: max-content;
+            max-width: calc(100% - 32px);
+        }
+
+        #startHilfe.sichtbar {
+            display: flex;
+        }
+
+        #startHilfe .start-knopf {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 14px 22px;
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            background: #18181b;
+            border-radius: 12px;
+            box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35);
+            animation: start-puls 2s ease-out infinite;
+        }
+
+        #startHilfe .start-knopf:hover {
+            background: #3f3f46;
+        }
+
+        #startHilfe .start-text {
+            font-size: 12.5px;
+            color: #27272a;
+            background: rgb(255 255 255 / 0.92);
+            border: 1px solid #e4e4e7;
+            border-radius: 8px;
+            padding: 5px 10px;
+            text-align: center;
+        }
+
+        @keyframes start-puls {
+            0% { box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(24 24 27 / 0.45); }
+            70% { box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35), 0 0 0 14px rgb(24 24 27 / 0); }
+            100% { box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(24 24 27 / 0); }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            #startHilfe .start-knopf {
+                animation: none;
+            }
         }
 
         /* Modal dialogs (oeffneDialog): content scrolls, the close button stays visible */
@@ -547,6 +756,32 @@
     <main class="mobile-map flex-1 relative h-[60vh] md:h-full bg-zinc-100">
         <div id="map" class="h-full w-full z-0 outline-none focus:outline-none"></div>
 
+        <!-- Drawing mode: what the draw tool creates -->
+        <div id="modusLeiste">
+            <div class="seg" role="group" aria-label="Was soll gezeichnet werden?">
+                <span class="beschriftung">Zeichnen:</span>
+                <button type="button" data-modus="sondenfeld" aria-pressed="false"
+                    title="Sondenfeld zeichnen: Fläche, in der die Sonden angeordnet werden">
+                    <span class="dot" style="background:#3b82f6"></span><span>Sondenfeld</span></button>
+                <button type="button" data-modus="restriction" aria-pressed="false"
+                    title="Restriktionsfläche zeichnen: Fläche, auf der keine Sonden stehen dürfen">
+                    <span class="dot" style="background:#f97316"></span><span>Restriktion<span class="lang">sfläche</span></span></button>
+                <button type="button" data-modus="tree" aria-pressed="false"
+                    title="Baum setzen: Baum, der in der Basiskarte fehlt">
+                    <span class="dot" style="background:#22c55e"></span><span>Baum</span></button>
+            </div>
+            <div id="modusBand" role="status"></div>
+        </div>
+
+        <!-- Start prompt: shown until the first borehole area exists -->
+        <div id="startHilfe">
+            <button type="button" class="start-knopf" id="startKnopf">
+                <iconify-icon icon="solar:pen-new-square-linear" width="22"></iconify-icon>
+                Sondenfeld zeichnen
+            </button>
+            <p class="start-text">Zeichnen Sie die Fläche für die Sonden auf die Karte, danach „Berechnen“ klicken.</p>
+        </div>
+
         <!-- Absolute positioned legends (controlled by JS display property, but styled here) -->
         <div id="legend" class="absolute bottom-8 right-4 z-[999] hidden">
             <p id="legend-title" class="font-semibold mb-2 text-xs uppercase tracking-wider text-zinc-900">
@@ -640,11 +875,11 @@
   <div class="text-left space-y-4">
     <div class="space-y-1">
         <h4 class="font-bold text-zinc-900 flex items-center gap-2">🛠️ Polygon zur Berechnung des Sondenfelds zeichnen</h4>
-        <p class="text-sm text-zinc-600">Zeichnen Sie zunächst ein Polygon. Verwenden Sie dazu das Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>). Klicken Sie auf die Karte, um die Eckpunkte zu setzen. Schließen Sie das Polygon, indem Sie auf den ersten Punkt zurückklicken. Danach klicken Sie auf „Berechnen", um die Berechnung zu starten.</p>
+        <p class="text-sm text-zinc-600">Zeichnen Sie zunächst ein Polygon. Verwenden Sie dazu das dunkle Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>) links auf der Karte; oben ist „Sondenfeld“ voreingestellt. Klicken Sie auf die Karte, um die Eckpunkte zu setzen. Schließen Sie das Polygon, indem Sie auf den ersten Punkt zurückklicken. Danach klicken Sie auf „Berechnen", um die Berechnung zu starten.</p>
     </div>
     <div class="space-y-1">
         <h4 class="font-bold text-zinc-900 flex items-center gap-2">🌳 Restriktionsflächen</h4>
-        <p class="text-sm text-zinc-600">Gebäude und Bäume werden automatisch berücksichtigt. Zusätzlich können Sie eigene Restriktionsflächen definieren: Wählen Sie im Dropdown-Menü den Eintrag „Restriktionsfläche zeichnen" aus und nutzen Sie anschließend das Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>), um die Fläche einzuzeichnen. Bäume, die nicht in der Basiskarte enthalten sind, können Sie über den Eintrag „Baum zeichnen" als grüne Punkte ergänzen; für sie gilt der eingestellte Baumabstand.</p>
+        <p class="text-sm text-zinc-600">Gebäude und Bäume werden automatisch berücksichtigt. Zusätzlich können Sie eigene Restriktionsflächen definieren: Wählen Sie oben auf der Karte „Restriktionsfläche“ aus und nutzen Sie anschließend das Zeichenwerkzeug (<iconify-icon icon="solar:pen-new-square-linear" inline></iconify-icon>), um die Fläche einzuzeichnen. Bäume, die nicht in der Basiskarte enthalten sind, können Sie über „Baum“ oben auf der Karte als grüne Punkte ergänzen; für sie gilt der eingestellte Baumabstand.</p>
     </div>
     <div class="space-y-1">
         <h4 class="font-bold text-zinc-900 flex items-center gap-2">🗺️ Weitere Kartenansichten auswählen</h4>
@@ -1050,51 +1285,6 @@
             editableFeatures.addLayer(layer);
         });
 
-        // Create a custom control for selecting the active layer
-        var LayerSelectControl = L.Control.extend({
-            options: {
-                position: 'bottomleft'
-            },
-
-            onAdd: function (map) {
-                var container = L.DomUtil.create('div', 'layer-select-control');
-
-                // Create select dropdown with modern styling
-                var select = L.DomUtil.create('select', 'layer-select', container);
-
-                // Add options
-                var optionDrawn = L.DomUtil.create('option', '', select);
-                optionDrawn.innerHTML = 'Sondenfeld zeichnen';
-                optionDrawn.value = 'drawnItems';
-
-                var optionRestrictions = L.DomUtil.create('option', '', select);
-                optionRestrictions.innerHTML = 'Restriktionsfläche zeichnen';
-                optionRestrictions.value = 'restrictionsLayer';
-
-                var optionTrees = L.DomUtil.create('option', '', select);
-                optionTrees.innerHTML = 'Baum zeichnen';
-                optionTrees.value = 'customTreesLayer';
-
-                // Add event listener
-                L.DomEvent.on(select, 'change', function (e) {
-                    if (e.target.value === 'restrictionsLayer') {
-                        activeLayer = restrictionsLayer;
-                        updateDrawOptions('restriction');
-                    } else if (e.target.value === 'customTreesLayer') {
-                        activeLayer = customTreesLayer;
-                        updateDrawOptions('tree');
-                    } else {
-                        activeLayer = drawnItems;
-                        updateDrawOptions('sondenfeld');
-                    }
-                });
-
-                L.DomEvent.disableClickPropagation(container);
-
-                return container;
-            }
-        });
-
         // Function to update draw options based on selected layer
         const treeStyle = { color: '#22c55e', fillColor: '#22c55e', fillOpacity: 0.8, radius: 4, weight: 1 };
 
@@ -1155,12 +1345,105 @@
             }
         }
 
-        // Add the layer selection control to the map
-        map.addControl(new LayerSelectControl());
+        // German texts for the draw toolbar and the tooltips that follow the cursor
+        function setzeDrawTexte(mode) {
+            const d = L.drawLocal.draw, e = L.drawLocal.edit;
+            d.toolbar.actions = { title: 'Zeichnen abbrechen', text: 'Abbrechen' };
+            d.toolbar.finish = { title: 'Zeichnen beenden', text: 'Fertig' };
+            d.toolbar.undo = { title: 'Letzten Punkt löschen', text: 'Letzten Punkt löschen' };
+            d.toolbar.buttons.polygon = mode === 'restriction' ? 'Restriktionsfläche zeichnen' : 'Sondenfeld zeichnen';
+            d.toolbar.buttons.circlemarker = 'Baum setzen';
+            d.handlers.polygon.tooltip = {
+                start: 'Klicken, um die Fläche zu beginnen.',
+                cont: 'Klicken, um weiterzuzeichnen.',
+                end: 'Ersten Punkt anklicken, um die Fläche zu schließen.'
+            };
+            d.handlers.polygon.error = '<strong>Fehler:</strong> Die Kanten dürfen sich nicht kreuzen.';
+            d.handlers.circlemarker.tooltip = { start: 'Klicken, um einen Baum zu setzen.' };
+            e.toolbar.actions.save = { title: 'Änderungen speichern', text: 'Speichern' };
+            e.toolbar.actions.cancel = { title: 'Bearbeiten abbrechen, alle Änderungen verwerfen', text: 'Abbrechen' };
+            e.toolbar.actions.clearAll = { title: 'Alle Flächen und Bäume löschen', text: 'Alle löschen' };
+            e.toolbar.buttons.edit = 'Flächen und Bäume bearbeiten';
+            e.toolbar.buttons.editDisabled = 'Nichts zum Bearbeiten vorhanden';
+            e.toolbar.buttons.remove = 'Flächen und Bäume löschen';
+            e.toolbar.buttons.removeDisabled = 'Nichts zum Löschen vorhanden';
+            e.handlers.edit.tooltip = { text: 'Punkte oder Markierungen ziehen, um zu bearbeiten.', subtext: '„Abbrechen“ macht die Änderungen rückgängig.' };
+            e.handlers.remove.tooltip = { text: 'Fläche oder Baum anklicken, um sie zu entfernen.' };
+        }
+
+        // What the draw tool creates: 'sondenfeld' (default), 'restriction' or 'tree'
+        let zeichenModus = 'sondenfeld';
+        const MODUS = {
+            sondenfeld: { farbe: '#3b82f6', text: 'Sondenfeld: Punkte setzen, ersten Punkt zum Schließen anklicken.' },
+            restriction: { farbe: '#f97316', text: 'Restriktionsfläche: Punkte setzen, ersten Punkt zum Schließen anklicken.' },
+            tree: { farbe: '#22c55e', text: 'Baum: auf die Karte klicken, um einen Baum zu setzen.' }
+        };
+
+        // The draw toolbar button that creates the current mode's shape
+        function zeichenKnopf(modus) {
+            return document.querySelector(modus === 'tree' ? '.leaflet-draw-draw-circlemarker' : '.leaflet-draw-draw-polygon');
+        }
+
+        function beendeZeichnen() {
+            if (drawControl && drawControl._toolbars) {
+                Object.values(drawControl._toolbars).forEach(tb => { if (tb.enabled && tb.enabled()) tb.disable(); });
+            }
+        }
+
+        // Switch what the draw tool creates (does not start drawing).
+        function setzeZeichenModus(modus) {
+            zeichenModus = modus;
+            activeLayer = modus === 'restriction' ? restrictionsLayer : modus === 'tree' ? customTreesLayer : drawnItems;
+            beendeZeichnen();   // a drawing in progress belongs to the old mode
+            setzeDrawTexte(modus);
+            updateDrawOptions(modus);
+            zeigeZeichenhilfe();
+        }
+
+        // One click on a mode button (or on the start prompt) selects the mode AND starts
+        // drawing. Clicking the mode that is being drawn again cancels it.
+        function starteZeichnen(modus) {
+            const laeuft = document.querySelector(`#modusLeiste [data-modus="${modus}"]`).getAttribute('aria-pressed') === 'true';
+            setzeZeichenModus(modus);
+            if (laeuft) return;
+            const knopf = zeichenKnopf(modus);
+            if (knopf) knopf.click();
+        }
+
+        // Which mode is being drawn (pressed button), and whether the start prompt shows.
+        let zeichnetGerade = false;
+        function zeigeZeichenhilfe() {
+            document.querySelectorAll('#modusLeiste [data-modus]').forEach(b =>
+                b.setAttribute('aria-pressed', String(zeichnetGerade && b.dataset.modus === zeichenModus)));
+            document.getElementById('startHilfe').classList.toggle('sichtbar',
+                !zeichnetGerade && drawnItems.getLayers().length === 0);
+        }
+        drawnItems.on('layeradd layerremove', zeigeZeichenhilfe);
+
+        document.querySelectorAll('#modusLeiste [data-modus]').forEach(b =>
+            b.addEventListener('click', () => starteZeichnen(b.dataset.modus)));
+        document.getElementById('startKnopf').addEventListener('click', () => starteZeichnen('sondenfeld'));
+
+        // Band with the instruction while a drawing is in progress
+        map.on('draw:drawstart', () => {
+            zeichnetGerade = true;
+            const band = document.getElementById('modusBand');
+            band.style.setProperty('--modus-farbe', MODUS[zeichenModus].farbe);
+            band.innerHTML = `<span>${MODUS[zeichenModus].text}</span><span class="esc"><kbd>Esc</kbd> bricht ab</span>`;
+            band.classList.add('sichtbar');
+            zeigeZeichenhilfe();
+        });
+        map.on('draw:drawstop', () => {
+            zeichnetGerade = false;
+            document.getElementById('modusBand').classList.remove('sichtbar');
+            zeigeZeichenhilfe();
+        });
 
         // Initial setup of draw control
         var drawControl;
+        setzeDrawTexte('sondenfeld');
         updateDrawOptions('sondenfeld');
+        zeigeZeichenhilfe();
 
         // Handle the draw:created event
         map.on('draw:created', function (e) {
