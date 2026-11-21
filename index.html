@@ -413,6 +413,25 @@
             text-align: center;
         }
 
+        /* Phones: some browsers (Brave) draw their bottom bar over the page without shrinking it,
+           so anything at the bottom edge of the map can be hidden. Centre the prompt instead. */
+        @media (max-width: 767px) {
+            #startHilfe {
+                bottom: auto;
+                top: 55%;
+                left: 58px;      /* right of the left toolbar */
+                right: 12px;
+                width: auto;
+                max-width: none;
+                transform: translateY(-50%);
+            }
+
+            #startHilfe .start-knopf {
+                padding: 12px 16px;
+                font-size: 15px;
+            }
+        }
+
         @keyframes start-puls {
             0% { box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35), 0 0 0 0 rgb(24 24 27 / 0.45); }
             70% { box-shadow: 0 6px 18px -4px rgb(0 0 0 / 0.35), 0 0 0 14px rgb(24 24 27 / 0); }
