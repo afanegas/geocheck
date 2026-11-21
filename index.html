@@ -1,7 +1,7 @@
 <!--
 	=======================================================
 	Projektname   : Geo-Check light
-	Version       : v3.5.0
+	Version       : v3.5.1
 	Erstellungsdatum : 26.09.2026
 	Autor	      : Alejandro Fanegas
 	Lizenz        : MIT-Lizenz
@@ -232,7 +232,7 @@
             </div>
             <div
                 class="text-[10px] text-zinc-400 font-medium tracking-wide uppercase bg-zinc-50 px-2 py-1 rounded border border-zinc-100">
-                v3.5.0
+                v3.5.1
                 <button type="button" onclick="showChangelog()"
                     class="ml-2 underline hover:text-zinc-700 transition-colors uppercase">Changelog</button>
             </div>
@@ -361,7 +361,8 @@
 
                     <div class="flex items-center justify-between group">
                         <label for="copWärmepumpe" class="text-sm text-zinc-600 font-medium">COP Wärmepumpe</label>
-                        <input type="number" id="copWärmepumpe" value="4" min="0" step="0.1"
+                        <input type="number" id="copWärmepumpe" value="4" min="1.1" step="0.1"
+                            title="Leistungszahl der Wärmepumpe (nur Werte größer 1). Bei COP 1 oder kleiner gibt es keine Heizleistung und keine Heizwärme aus Entzug und Strom; die Anzeige bleibt leer."
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
                 </div>
@@ -430,11 +431,11 @@
                     </p>
                     <p id="wärmeleitfähigkeit" class="text-xs leading-relaxed text-zinc-500"
                         title="Sie können die angezeigte Wärmeleitfähigkeit als Eingabeparameter übernehmen (hier und im Geo‑Check‑Companion).">
-                        <span class="font-semibold text-zinc-700 block mb-0.5">Spez. Wärmeleitfähigkeit</span>
+                        <span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span>
                         -
                     </p>
                     <p id="tiefenrestriktion" class="text-xs leading-relaxed text-zinc-500">
-                        <span class="font-semibold text-zinc-700 block mb-0.5">Höhenlage Top Rupelton</span>
+                        <span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton [m]</span>
                         -
                     </p>
                 </div>
@@ -559,6 +560,12 @@
     <!-- CHANGELOG_BEGIN (Kopie von backend/data/docs/changelog_light.md, vom Test geprüft) -->
     <script type="text/markdown" id="changelog-md">
 # Changelog Geo-Check light
+
+## Version 3.5.1 (21.11.2026)
+
+- Einheitliche Titel in den Ergebnisfeldern; die Wärmeleitfähigkeit nennt „bis 100 m“.
+- COP nur noch größer 1.
+- Verständlicher Hinweis bei zu hoher Regeneration, mit höchstem zulässigem Regenerationsgrad.
 
 ## Version 3.5.0 (20.11.2026)
 
@@ -1427,29 +1434,51 @@
             return geohandSpezEntzugsleistung(lambda, tiefe, gValue(anzahlSonden, abstand, tiefe, lnZeit), opts);
         }
 
-        // Hinweise zur Kühlseite der Regeneration, als Liste von Texten: leer ohne
-        // Regeneration oder wenn der Wärmeeintrag die Grenzen aus KUEHL_GRENZEN einhält.
+        // Höchster Regenerationsgrad (Anteil 0 … 1), bei dem die Kühlgrenzen aus KUEHL_GRENZEN
+        // mit den festen Kühlannahmen noch eingehalten sind. Die Entzugsleistung hängt selbst vom
+        // Regenerationsgrad ab, deshalb wird er per Intervallhalbierung gesucht (die Erwärmung
+        // der Sole steigt mit dem Regenerationsgrad). Argumente wie spezifischeEntzugsleistung().
+        function hoechsterRegenerationsgrad(lambdaBoden, anzahlSonden, sondenAbstand, sondenTiefe, volllaststunden, auslegungsJahre) {
+            const lambda = begrenze(lambdaBoden, GEOCHECK_GRENZEN.lambda);
+            const opts = volllaststunden > 0 ? { Usage: volllaststunden } : undefined;
+            const ok = (r) => {
+                const q = spezifischeEntzugsleistung(lambdaBoden, anzahlSonden, sondenAbstand, sondenTiefe,
+                    volllaststunden, auslegungsJahre, r);
+                return !(q > 0) || geohandKuehlpruefung(lambda, q, r, opts).ok;
+            };
+            if (ok(1)) return 1;
+            let lo = 0, hi = 1;
+            for (let i = 0; i < 30; i++) {
+                const mid = (lo + hi) / 2;
+                if (ok(mid)) lo = mid; else hi = mid;
+            }
+            return lo;
+        }
+
+        // Hinweis zur Kühlseite der Regeneration, als Liste von Texten: leer ohne Regeneration
+        // oder wenn der Wärmeeintrag die Grenzen aus KUEHL_GRENZEN einhält.
         // spezEntzug: Ergebnis von spezifischeEntzugsleistung() [W/m].
-        function regenerationsHinweise(lambdaBoden, spezEntzug, volllaststunden, regeneration) {
+        // grenze (optional): höchster Regenerationsgrad mit eingehaltenen Grenzen (Anteil 0 … 1),
+        // aus hoechsterRegenerationsgrad(); wird auf 5 % abgerundet genannt.
+        function regenerationsHinweise(lambdaBoden, spezEntzug, volllaststunden, regeneration, grenze) {
             if (!(regeneration > 0) || !(spezEntzug > 0) || !(lambdaBoden > 0)) return [];
             const r = begrenze(regeneration, GEOCHECK_GRENZEN.regeneration);
             const opts = volllaststunden > 0 ? { Usage: volllaststunden } : undefined;
             const pruefung = geohandKuehlpruefung(begrenze(lambdaBoden, GEOCHECK_GRENZEN.lambda), spezEntzug, r, opts);
             if (pruefung.ok) return [];
             const zahl = (x) => x.toLocaleString('de-DE', { maximumFractionDigits: 1 });
-            const ueberschritten = [];
-            if (pruefung.dT_monat > KUEHL_GRENZEN.monat) {
-                ueberschritten.push(`im Monatsmittel um ${zahl(pruefung.dT_monat)} K (zulässig ${KUEHL_GRENZEN.monat} K)`);
-            }
-            if (pruefung.dT_spitze > KUEHL_GRENZEN.spitze) {
-                ueberschritten.push(`bei Spitzenlast um ${zahl(pruefung.dT_spitze)} K (zulässig ${KUEHL_GRENZEN.spitze} K)`);
-            }
-            const o = Object.assign({}, GEOHAND_DEFAULTS, opts || {});
-            return [`Bei ${zahl(r * 100)} % Regeneration erwärmt der Wärmeeintrag die Sole ${ueberschritten.join(' und ')} ` +
-                'über das ungestörte Erdreich (Grenzen nach VDI 4640). Angenommen sind ' +
-                `${o.Usage_cool} Volllaststunden Kühlung und ${zahl(o.monthly_share_cool * 100)} % des Jahreseintrags im ` +
-                'stärksten Monat. So viel Wärme kann das Sondenfeld in dieser Zeit nicht aufnehmen: ' +
-                'Regenerationsgrad verringern oder im Geo-Check-Companion mit eigenen Annahmen rechnen.'];
+            const grenzeProzent = Number.isFinite(grenze) ? Math.floor(grenze * 100 / 5 + 1e-9) * 5 : NaN;
+            const grenzSatz = grenzeProzent > 0
+                ? `Die Grenzen sind bis etwa ${grenzeProzent} % Regeneration eingehalten. `
+                : 'Wählen Sie einen niedrigeren Regenerationsgrad. ';
+            return [`Bei ${zahl(r * 100)} % Regeneration wird dem Erdreich im Sommer sehr viel Wärme zugeführt. ` +
+                'Das Sondenfeld kann diese Wärme bei einer üblichen Gebäudekühlung nicht aufnehmen: ' +
+                'Der Eintrag fällt dort an wenigen heißen Tagen an und erwärmt die Sole zu stark. ' +
+                'Die angezeigte Entzugsleistung ist deshalb in diesem Fall zu hoch. ' +
+                'Eine hohe Regeneration funktioniert nur, wenn die Wärme gleichmäßig über viele Monate eingetragen wird, ' +
+                'zum Beispiel mit Solarthermie. Bei einer normalen Gebäudekühlung ist ein geringerer Regenerationsgrad realistisch. ' +
+                grenzSatz +
+                'Für eine genauere Rechnung mit eigenen Annahmen nutzen Sie den Geo-Check-Companion.'];
         }
 
         // Hinweise zu Eingaben außerhalb des Gültigkeitsbereichs, als Liste von Texten.
@@ -1770,7 +1799,11 @@
             const box = document.getElementById('eingabeHinweis');
             const hinweise = anzahlSonden >= 1
                 ? eingabeHinweise(params.lambdaBoden, anzahlSonden, params.sondenAbstand, params.sondenTiefe, params.regeneration)
-                    .concat(regenerationsHinweise(params.lambdaBoden, spezEntzug, params.volllaststunden, params.regeneration))
+                    .concat(regenerationsHinweise(params.lambdaBoden, spezEntzug, params.volllaststunden, params.regeneration,
+                        params.regeneration > 0
+                            ? hoechsterRegenerationsgrad(params.lambdaBoden, anzahlSonden, params.sondenAbstand,
+                                params.sondenTiefe, params.volllaststunden, params.auslegungsJahre)
+                            : undefined))
                 : [];
             box.replaceChildren(...hinweise.map(text => {
                 const p = document.createElement('p');
@@ -1799,7 +1832,7 @@
             const spezEntzugsleistung = spezifischeEntzugsleistung(params.lambdaBoden, anzahlSonden, params.sondenAbstand, params.sondenTiefe, params.volllaststunden, params.auslegungsJahre, params.regeneration); // W/m
             zeigeEingabeHinweise(params, anzahlSonden, spezEntzugsleistung);
             const gesamteEntzugsleistung = anzahlSonden * params.sondenTiefe * spezEntzugsleistung / 1000;
-            const heizleistung = (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1);
+            const heizleistung = params.copWärmepumpe > 1 ? (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1) : NaN;
             const waerme = jaehrlicheWaerme(gesamteEntzugsleistung, params.copWärmepumpe, params.volllaststunden, params.regeneration); // MWh/a
             // Funktion zur Formatierung von Zahlen
             function formatNumber(number) {
@@ -2207,7 +2240,7 @@
                     const resultElement = document.getElementById("wärmeleitfähigkeit");
 
                     if (!geothermalPointsLayer || geothermalPointsLayer.getLayers().length === 0) {
-                        if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`; }
+                        if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`; }
                         return resolve();
                     }
 
@@ -2215,7 +2248,7 @@
                     drawnItems.eachLayer((layer) => { if (layer instanceof L.Polygon) { userPolygons.push(layer); } });
 
                     if (userPolygons.length === 0) {
-                        if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`; }
+                        if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`; }
                         return resolve();
                     }
 
@@ -2229,7 +2262,7 @@
                     });
 
                     if (!closestSonde) {
-                        if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`; }
+                        if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`; }
                         return resolve();
                     }
 
@@ -2255,18 +2288,18 @@
                                     });
                                 });
                                 if (resultElement && wlfRange) {
-                                    resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> ${wlfRange}`;
+                                    resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> ${wlfRange}`;
                                 } else if (resultElement) {
-                                    resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`;
+                                    resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`;
                                 }
                             } else {
-                                if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`; }
+                                if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`; }
                             }
                             resolve();
                         })
                         .catch((error) => {
                             addDebugLog(`Fehler bei der WMS-Abfrage: ${error.message}`);
-                            if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`; }
+                            if (resultElement) { resultElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`; }
                             resolve();
                         });
                 } catch (error) {
@@ -3762,12 +3795,12 @@
 
             const wlfElement = document.getElementById("wärmeleitfähigkeit");
             if (wlfElement) {
-                wlfElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit [W/m·K]</span> -`;
+                wlfElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Wärmeleitfähigkeit bis 100 m [W/(m·K)]</span> -`;
             }
 
             const rupeltonElement = document.getElementById("tiefenrestriktion");
             if (rupeltonElement) {
-                rupeltonElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton</span> -`;
+                rupeltonElement.innerHTML = `<span class="font-semibold text-zinc-700 block mb-0.5">Top Rupelton [m]</span> -`;
             }
             setzeAutoTiefe(undefined);
         }
@@ -3981,7 +4014,7 @@
             const spezEntzugsleistung = spezifischeEntzugsleistung(params.lambdaBoden, anzahlSonden, params.sondenAbstand, params.sondenTiefe, params.volllaststunden, params.auslegungsJahre, params.regeneration); // W/m
             zeigeEingabeHinweise(params, anzahlSonden, spezEntzugsleistung);
             const gesamteEntzugsleistung = anzahlSonden * params.sondenTiefe * spezEntzugsleistung / 1000;
-            const heizleistung = (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1);
+            const heizleistung = params.copWärmepumpe > 1 ? (gesamteEntzugsleistung * params.copWärmepumpe) / (params.copWärmepumpe - 1) : NaN;
             const waerme = jaehrlicheWaerme(gesamteEntzugsleistung, params.copWärmepumpe, params.volllaststunden, params.regeneration); // MWh/a
 
             function formatNumber(number) {
