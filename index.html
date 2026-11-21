@@ -4055,7 +4055,7 @@
                 ['Auslegungszeitraum', document.getElementById('auslegungszeitraum').selectedOptions[0].text],
                 ['Sondenabstand', exportNumber('sondenAbstand') + ' m'],
                 ['Abstand Gebäude', exportNumber('gebäudeAbstand') + ' m'],
-                ['Abstand Bäume', exportNumber('bäumeAbstand') + ' m' + (kronenAn() ? ' (Kronenradius)' : '')],
+                ['Abstand Bäume', exportNumber('bäumeAbstand') + ' m' + (kronenAn() ? ' (Krone)' : '')],
             ];
             const eingabeHinweisBox = document.getElementById('eingabeHinweis');
             const warnTexts = eingabeHinweisBox.classList.contains('hidden') ? []
@@ -4075,8 +4075,24 @@
             warnTexts.forEach((t) => exportWrap(mctx, t, W - 2 * PAD).forEach((l) => noteLines.push({ t: l, c: '#92400e' })));
             if (auflagen) exportWrap(mctx, auflagen, W - 2 * PAD).forEach((l) => noteLines.push({ t: l, c: INK3 }));
 
-            const GRID_COLS = 3, GRID_ROW_H = 44;
-            const gridRows = Math.ceil(chips.length / GRID_COLS);
+            // Annahmen: ein Fließtext "Annahmen: Beschriftung Wert · Beschriftung Wert · ...", umbrochen wenn nötig
+            const ANN_SIZE = 11.5, ANN_LH = 20, SEP_GAP = 8;
+            const annZeilen = [[]];
+            let annX = 0;
+            mctx.font = font(600, ANN_SIZE);
+            const kopfBreite = mctx.measureText('Annahmen:').width + 8;
+            chips.forEach(([label, value]) => {
+                mctx.font = font(400, ANN_SIZE); const lw = mctx.measureText(label + ' ').width;
+                mctx.font = font(600, ANN_SIZE); const vw = mctx.measureText(value).width;
+                const aktuelle = annZeilen[annZeilen.length - 1];
+                const start = aktuelle.length ? annX + SEP_GAP * 2 + 4 : (annZeilen.length === 1 ? kopfBreite : 0);
+                if (aktuelle.length && start + lw + vw > W - 2 * PAD) {
+                    annZeilen.push([]); annX = 0;
+                    annZeilen[annZeilen.length - 1].push({ label, value, lw, x: 0 }); annX = lw + vw;
+                } else {
+                    aktuelle.push({ label, value, lw, x: start }); annX = start + lw + vw;
+                }
+            });
 
             // Vergleich Regeneration: Überschrift, Kopfzeile, eine Zeile je Wert (Fußnote: noteLines)
             const SZ_HEAD = 34, SZ_ROW = 27;
@@ -4091,8 +4107,8 @@
             const notesTop = y;
             y += noteLines.length * 16.5;
             const assumpTop = y + (noteLines.length ? 18 : 4);
-            const chipsTop = assumpTop + 24;
-            const footTop = chipsTop + gridRows * GRID_ROW_H + 8;
+            const chipsTop = assumpTop + 12;
+            const footTop = chipsTop + annZeilen.length * ANN_LH + 16;
             const H = footTop + FOOT_H;
 
             // ---- Zeichnen
@@ -4247,17 +4263,17 @@
             ctx.font = font(400, 11);
             noteLines.forEach((l, i) => { ctx.fillStyle = l.c; ctx.fillText(l.t, PAD, notesTop + 12 + i * 16.5); });
 
-            // Annahmen: Raster aus Beschriftung und Wert
-            ctx.font = font(600, 11); exportSpacing(ctx, 0.99);
-            ctx.fillStyle = INK3; ctx.fillText('ANNAHMEN DER BERECHNUNG', PAD, assumpTop + 8);
-            exportSpacing(ctx, 0);
-            ctx.fillStyle = LINE; ctx.fillRect(PAD, assumpTop + 16, W - 2 * PAD, 1);
-            const gcw = (W - 2 * PAD) / GRID_COLS;
-            chips.forEach(([label, value], i) => {
-                const col = i % GRID_COLS, row = Math.floor(i / GRID_COLS);
-                const gx = PAD + col * gcw, gy = chipsTop + row * GRID_ROW_H;
-                ctx.font = font(400, 11.5); ctx.fillStyle = INK3; ctx.fillText(label, gx, gy + 14);
-                ctx.font = font(600, 13.5); ctx.fillStyle = INK; ctx.fillText(value, gx, gy + 33);
+            // Annahmen: Fließtext, Werte fett, durch Mittelpunkte getrennt
+            ctx.fillStyle = HAAR; ctx.fillRect(PAD, assumpTop, W - 2 * PAD, 1);
+            annZeilen.forEach((zeile, r) => {
+                const base = chipsTop + 14 + r * ANN_LH;
+                if (r === 0) { ctx.font = font(600, ANN_SIZE); ctx.fillStyle = INK2; ctx.fillText('Annahmen:', PAD, base); }
+                zeile.forEach((c, i) => {
+                    const x = PAD + c.x;
+                    if (i > 0) { ctx.font = font(400, ANN_SIZE); ctx.fillStyle = INK3; ctx.fillText('·', x - SEP_GAP - 2, base); }
+                    ctx.font = font(400, ANN_SIZE); ctx.fillStyle = INK3; ctx.fillText(c.label + ' ', x, base);
+                    ctx.font = font(600, ANN_SIZE); ctx.fillStyle = INK; ctx.fillText(c.value, x + c.lw, base);
+                });
             });
 
             // Fußzeile: feine Linie, ruhige Schrift
