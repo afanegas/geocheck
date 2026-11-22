@@ -530,6 +530,7 @@
                         <input type="text" inputmode="decimal" autocomplete="off" id="sondenAbstand" value="6"
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
+                    <p id="meldung-sondenAbstand" role="status" class="hidden text-xs leading-relaxed text-red-700 -mt-1"></p>
 
                     <div class="flex items-center justify-between group">
                         <label for="gebäudeAbstand" class="text-sm text-zinc-600 font-medium">Gebäudeabstand <span
@@ -609,6 +610,7 @@
                             title="Anteil des jährlichen Wärmeentzugs, der dem Erdreich im Sommer wieder zugeführt wird, z. B. aus der Gebäudekühlung oder über Solarthermie. Die Regeneration verringert die langfristige Auskühlung des Erdreichs und erhöht damit die mögliche Entzugsleistung, vor allem bei großen Feldern. 0 % (Standard): keine Regeneration. Gültigkeitsbereich: 0 bis 100 %. Geprüft wird auch, ob das Sondenfeld die eingetragene Wärme aufnehmen kann (Erwärmung der Sole höchstens 15 K im Monatsmittel und 20 K bei Spitzenlast, angenommen 500 Volllaststunden Kühlung und 40 % des Jahreseintrags im stärksten Monat); sonst erscheint ein Hinweis unter den Ergebnissen."
                             class="w-20 text-right text-sm px-2 py-1.5 bg-zinc-50 border border-zinc-200 rounded focus:bg-white focus:border-zinc-400 focus:outline-none transition-all font-mono text-zinc-800">
                     </div>
+                    <p id="meldung-regenerationsgrad" role="status" class="hidden text-xs leading-relaxed text-red-700 -mt-1"></p>
 
                     <div class="flex items-center justify-between group">
                         <label for="copWärmepumpe" class="text-sm text-zinc-600 font-medium">COP Wärmepumpe</label>
@@ -1811,8 +1813,8 @@
                 'Für eine genauere Rechnung mit eigenen Annahmen nutzen Sie den Geo-Check-Companion.'];
         }
 
-        // Hinweise zu Eingaben außerhalb des Gültigkeitsbereichs, als Liste von Texten.
-        // regeneration (optional): Regenerationsgrad als Anteil am Jahresentzug.
+        // Hinweise zu Eingaben außerhalb des Gültigkeitsbereichs, als Liste von Texten. Sondenabstände unter 6 m
+        // und Regenerationsgrade über 100 % lässt die Seite nicht zu (pruefeEingabe).
         function eingabeHinweise(lambdaBoden, anzahlSonden, sondenAbstand, sondenTiefe, regeneration) {
             const zahl = (x) => x.toLocaleString('de-DE', { maximumFractionDigits: 2 });
             const hinweise = [];
@@ -1824,11 +1826,6 @@
             pruefe(lambdaBoden, GEOCHECK_GRENZEN.lambda, 'Wärmeleitfähigkeit', 'W/(m·K)');
             pruefe(sondenAbstand, GEOCHECK_GRENZEN.abstand, 'Sondenabstand', 'm');
             pruefe(sondenTiefe, GEOCHECK_GRENZEN.tiefe, 'Sondentiefe', 'm');
-            pruefe(regeneration * 100, GEOCHECK_GRENZEN.regeneration.map((x) => x * 100), 'Regenerationsgrad', '%');
-            if (sondenAbstand > 0 && sondenAbstand < GEOCHECK_GRENZEN.abstand[0]) {
-                hinweise.push('Bei Sondenabständen unter 6 m gilt das Verfahren nach GEO-HANDlight nicht; ' +
-                    'die tatsächliche Entzugsleistung ist geringer als angezeigt.');
-            }
             if (anzahlSonden > GEOCHECK_GRENZEN.maxSonden) {
                 hinweise.push(`Mehr als ${GEOCHECK_GRENZEN.maxSonden} Sonden: Die gegenseitige Beeinflussung ist ` +
                     'über den berechneten Bereich hinaus fortgeschrieben (extrapoliert).');
@@ -2280,6 +2277,7 @@
         // BERECHNUNGSPROZESS 
         // //////////// 
         async function executeFullProcess() {
+            Object.keys(EINGABE_GRENZEN).forEach(pruefeEingabe);   // unzulässige Eingaben zuerst zurücksetzen
             showLoadingIndicator();
             startProcessTimer();
             addDebugLog("Starte den vollständigen Erdwärmesondenprozess...");
@@ -4598,6 +4596,37 @@
             // Reset input so the same file can be imported again
             event.target.value = '';
         }
+
+        // Eingaben, die das Verfahren nicht zulässt, werden auf die Grenze zurückgesetzt, mit kurzer Meldung:
+        // Sondenabstand unter 6 m (GEO-HANDlight gilt erst ab 6 m) und Regenerationsgrad über 100 %
+        // (mehr als der Entzug lässt sich nicht zuführen) oder unter 0 %.
+        const EINGABE_GRENZEN = {
+            sondenAbstand: { min: 6, minText: 'Der Sondenabstand muss mindestens 6 m betragen.' },
+            regenerationsgrad: { min: 0, max: 100,
+                minText: 'Der Regenerationsgrad muss zwischen 0 und 100 % liegen.',
+                maxText: 'Der Regenerationsgrad muss zwischen 0 und 100 % liegen.' }
+        };
+        // Liefert true, wenn der Wert zurückgesetzt wurde.
+        function pruefeEingabe(id) {
+            const g = EINGABE_GRENZEN[id], feld = document.getElementById(id);
+            const meldung = document.getElementById('meldung-' + id);
+            const wert = leseZahl(id);
+            if (!Number.isFinite(wert)) { meldung.classList.add('hidden'); return false; }
+            let neu = wert, text = '';
+            if (g.min !== undefined && wert < g.min) { neu = g.min; text = g.minText; }
+            else if (g.max !== undefined && wert > g.max) { neu = g.max; text = g.maxText; }
+            if (neu === wert) return false;                // gültig: eine frühere Meldung bleibt, bis das Feld bearbeitet wird
+            feld.value = zahlText(neu);
+            feld.dispatchEvent(new Event('input'));      // Ergebnisse und Markierungen wie bei einer Eingabe
+            meldung.textContent = text;
+            meldung.classList.remove('hidden');
+            return true;
+        }
+        Object.keys(EINGABE_GRENZEN).forEach((id) => {
+            const feld = document.getElementById(id);
+            feld.addEventListener('change', () => pruefeEingabe(id));
+            feld.addEventListener('input', () => document.getElementById('meldung-' + id).classList.add('hidden'));
+        });
 
         //Listener - Wenn PArameter Änderung automatische Berechnung
         // Event-Listener für relevante Felder hinzufügen
